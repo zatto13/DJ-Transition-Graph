@@ -1,0 +1,3732 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJ Transition Graph - 楽曲つなぎメモ＆ルーティング</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        dj: {
+                            bg: '#090a0f',
+                            panel: '#12141d',
+                            surface: '#1a1d2b',
+                            border: '#282c3f',
+                            cyan: '#06b6d4',
+                            pink: '#ec4899',
+                            purple: '#8b5cf6',
+                            amber: '#f59e0b',
+                            emerald: '#10b981',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #090a0f;
+            color: #e2e8f0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #12141d;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #282c3f;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f4663;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+        }
+        .glow-pink {
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.25);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans antialiased">
+
+    <!-- トップヘッダーバー -->
+    <header class="h-14 bg-dj-panel border-b border-dj-border px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0 relative z-40">
+        <!-- ロゴ & タイトル + 左パネル開閉ボタン -->
+        <div class="flex items-center gap-2 shrink-0">
+            <button type="button" id="btn-toggle-left-sidebar" class="p-2 rounded-lg bg-dj-cyan/15 hover:bg-dj-cyan/25 border border-dj-cyan/40 text-dj-cyan transition cursor-pointer shrink-0" title="つなぎ一覧パネルの表示／非表示を切り替え">
+                <i data-lucide="panel-left-close" class="w-4 h-4 pointer-events-none"></i>
+            </button>
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-dj-cyan to-dj-purple flex items-center justify-center shadow-lg glow-cyan">
+                <i data-lucide="disc-3" class="w-5 h-5 text-white animate-spin" style="animation-duration: 8s;"></i>
+            </div>
+            <div class="hidden xl:block">
+                <h1 class="text-sm font-bold tracking-wider text-white flex items-center gap-2">
+                    TRANSITION DECK
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-surface text-dj-cyan border border-dj-cyan/30">PRO</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">DJ 楽曲つなぎ＆ルーティング・グラフ</p>
+            </div>
+        </div>
+
+        <!-- ツールバー（中央アクション） -->
+        <div class="flex items-center gap-1 sm:gap-1.5 bg-dj-surface/60 p-1 rounded-xl border border-dj-border shrink-0">
+            <button id="btn-add-node" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-dj-cyan/10 text-dj-cyan hover:bg-dj-cyan/20 border border-dj-cyan/30 transition" title="キャンバスをダブルクリックでも追加可能">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                <span>曲を追加</span>
+            </button>
+            <button id="btn-connect-mode" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition" title="Shift+ドラッグでもつなぎを作成可能">
+                <i data-lucide="git-commit-horizontal" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">つなぎ作成</span>
+            </button>
+            <div class="h-4 w-px bg-dj-border mx-0.5"></div>
+            <button id="btn-focus-mode" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-dj-purple/20 text-dj-purple border border-dj-purple/40 transition" title="選択中の曲から次に行ける候補をハイライト">
+                <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">フォーカス</span>
+            </button>
+            <button id="btn-setlist-mode" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition" title="クリック順にセットリストを構築">
+                <i data-lucide="list-music" class="w-3.5 h-3.5"></i>
+                <span class="hidden md:inline">ルート記録</span>
+            </button>
+            <div class="h-4 w-px bg-dj-border mx-0.5"></div>
+            <!-- 自動整列ドロップダウンメニュー -->
+            <div class="relative" id="layout-menu-wrapper">
+                <button type="button" id="btn-layout-menu" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface hover:text-white border border-transparent transition cursor-pointer" title="グラフを自動整列">
+                    <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-dj-amber pointer-events-none"></i>
+                    <span class="hidden sm:inline pointer-events-none">自動整列</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 pointer-events-none"></i>
+                </button>
+                <div id="layout-dropdown" class="hidden absolute left-0 mt-2 w-64 bg-dj-panel border border-dj-border rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+                    <div class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">オートレイアウト整列</div>
+                    <button type="button" id="btn-layout-bpm" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
+                        <i data-lucide="arrow-right-from-line" class="w-4 h-4 text-dj-cyan shrink-0 mt-0.5 pointer-events-none"></i>
+                        <div class="pointer-events-none">
+                            <div class="font-medium text-white">BPM順（左 → 右）</div>
+                            <div class="text-[10px] text-slate-400">低BPMから高BPMへ時系列フロー配置</div>
+                        </div>
+                    </button>
+                    <button type="button" id="btn-layout-genre" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
+                        <i data-lucide="boxes" class="w-4 h-4 text-dj-purple shrink-0 mt-0.5 pointer-events-none"></i>
+                        <div class="pointer-events-none">
+                            <div class="font-medium text-white">ジャンル別クラスター</div>
+                            <div class="text-[10px] text-slate-400">同じジャンルの曲ごとに島を作って整列</div>
+                        </div>
+                    </button>
+                    <button type="button" id="btn-layout-force" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
+                        <i data-lucide="network" class="w-4 h-4 text-dj-emerald shrink-0 mt-0.5 pointer-events-none"></i>
+                        <div class="pointer-events-none">
+                            <div class="font-medium text-white">力学整列（終点外側配置）</div>
+                            <div class="text-[10px] text-slate-400">起点を中心、つなぎの終点を外周に配置</div>
+                        </div>
+                    </button>
+                    <button type="button" id="btn-layout-gravity" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
+                        <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-dj-pink shrink-0 mt-0.5 pointer-events-none"></i>
+                        <div class="pointer-events-none">
+                            <div class="font-medium text-white">重力整列（物理シミュレーション）</div>
+                            <div class="text-[10px] text-slate-400">起点から下向き重力とバネ張力で有機的に整列</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 検索 & フィルター & データ操作（右） -->
+        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <!-- ジャンルフィルタードロップダウン -->
+            <div class="relative hidden md:block shrink-0">
+                <select id="genre-filter" class="bg-dj-surface border border-dj-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-dj-cyan max-w-[130px] truncate cursor-pointer" title="ジャンルで絞り込みハイライト">
+                    <option value="">全ジャンル (All)</option>
+                </select>
+            </div>
+
+            <!-- 常設検索バー（タイトル・アーティスト・メモ・BPM・キー合致強調） -->
+            <div class="relative flex items-center min-w-0">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                <input type="text" id="search-input" placeholder="タイトル・アーティスト・メモ検索..." class="bg-dj-surface border border-dj-border rounded-lg pl-8 pr-16 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-dj-cyan focus:ring-1 focus:ring-dj-cyan/40 w-36 sm:w-52 lg:w-64 transition">
+                <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <span id="search-match-count" class="hidden text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-cyan/20 text-dj-cyan border border-dj-cyan/40">0件</span>
+                    <button type="button" id="btn-clear-search" class="hidden text-slate-400 hover:text-white p-0.5" title="検索をクリア">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- データメニューボタン -->
+            <div class="relative shrink-0" id="data-menu-wrapper">
+                <button type="button" id="btn-data-menu" class="p-2 rounded-lg bg-dj-surface hover:bg-dj-border/60 border border-dj-border text-slate-300 transition cursor-pointer" title="データ管理 (JSON / サンプル / リセット)">
+                    <i data-lucide="folder-cog" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+                <!-- ドロップダウン -->
+                <div id="data-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-dj-panel border border-dj-border rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+                    <button type="button" id="btn-export-json" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-center gap-2 text-slate-200 cursor-pointer">
+                        <i data-lucide="download" class="w-3.5 h-3.5 text-dj-cyan pointer-events-none"></i> JSONエクスポート
+                    </button>
+                    <label id="label-import-json" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-center gap-2 text-slate-200 cursor-pointer">
+                        <i data-lucide="upload" class="w-3.5 h-3.5 text-dj-emerald pointer-events-none"></i> JSONインポート
+                        <input type="file" id="input-import-json" accept=".json,application/json" class="hidden">
+                    </label>
+                    <div class="my-1 border-t border-dj-border"></div>
+                    <button type="button" id="btn-load-sample" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-center gap-2 text-slate-200 cursor-pointer">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-dj-purple pointer-events-none"></i> サンプルデータを復元
+                    </button>
+                    <button type="button" id="btn-clear-all" class="w-full px-3.5 py-2.5 text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 cursor-pointer">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5 pointer-events-none"></i> すべてクリア（新規作成）
+                    </button>
+                </div>
+            </div>
+
+            <!-- 編集パネル（インスペクター）開閉トグルボタン（全画面サイズ対応） -->
+            <button type="button" id="btn-toggle-sidebar" class="p-2 rounded-lg bg-dj-cyan/15 hover:bg-dj-cyan/25 border border-dj-cyan/40 text-dj-cyan transition cursor-pointer shrink-0" title="編集パネルの表示／非表示を切り替え">
+                <i data-lucide="panel-right-close" class="w-4 h-4 pointer-events-none"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツエリア -->
+    <div class="flex-1 flex relative overflow-hidden">
+
+        <!-- 左サイドバー（つなぎ一覧リスト） -->
+        <aside id="transition-list-sidebar" class="fixed md:static inset-y-0 left-0 top-14 md:top-0 w-72 lg:w-80 bg-dj-panel border-r border-dj-border flex flex-col z-30 transform -translate-x-full md:translate-x-0 transition-all duration-200 ease-out shrink-0">
+            <!-- ヘッダー -->
+            <div class="px-3.5 py-2.5 border-b border-dj-border flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="git-merge" class="w-4 h-4 text-dj-pink"></i>
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-200">つなぎ一覧</span>
+                    <span id="transition-list-count" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-surface text-dj-cyan border border-dj-border">0</span>
+                </div>
+                <button type="button" id="btn-close-left-sidebar" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-dj-surface transition cursor-pointer" title="つなぎ一覧を隠す">
+                    <i data-lucide="panel-left-close" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+            </div>
+
+            <!-- 絞り込み & 並び替えバー -->
+            <div class="p-2.5 border-b border-dj-border/70 bg-dj-bg/40 space-y-2 shrink-0">
+                <div class="relative">
+                    <i data-lucide="filter" class="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                    <input type="text" id="transition-list-filter" placeholder="曲名・手法・メモで絞り込み..." class="w-full bg-dj-surface border border-dj-border rounded-lg pl-7 pr-6 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-dj-pink transition">
+                    <button type="button" id="btn-clear-transition-filter" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between gap-1.5">
+                    <span class="text-[10px] text-slate-400">並び順:</span>
+                    <select id="transition-list-sort" class="bg-dj-surface border border-dj-border rounded-md px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-dj-pink cursor-pointer flex-1">
+                        <option value="recent">登録順（新しい順）</option>
+                        <option value="rating">鉄板度順（★高い順）</option>
+                        <option value="source">出発曲名順 (A → Z)</option>
+                        <option value="bpm">出発BPM順</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- つなぎリスト本体 -->
+            <div id="transition-list-items" class="flex-1 overflow-y-auto p-2.5 space-y-2"></div>
+        </aside>
+
+        <!-- キャンバス領域 -->
+        <div id="canvas-container" class="flex-1 relative bg-dj-bg overflow-hidden">
+            <canvas id="graph-canvas"></canvas>
+
+            <!-- 左上ステータス＆操作ガイドオーバーレイ -->
+            <div class="absolute top-3 left-3 pointer-events-none flex flex-col gap-2">
+                <div id="mode-banner" class="hidden pointer-events-auto px-3 py-1.5 rounded-lg bg-dj-pink/20 border border-dj-pink/50 text-pink-200 text-xs font-medium flex items-center gap-2 backdrop-blur-md">
+                    <span class="w-2 h-2 rounded-full bg-dj-pink animate-ping"></span>
+                    <span id="mode-banner-text">つなぎ作成モード：出発曲から到着曲へドラッグ（または順にクリック）</span>
+                    <button id="btn-cancel-mode" class="ml-2 text-xs underline hover:text-white">終了</button>
+                </div>
+
+                <!-- モバイル用ジャンルフィルター -->
+                <div class="md:hidden pointer-events-auto">
+                    <select id="genre-filter-mobile" class="bg-dj-panel/90 backdrop-blur border border-dj-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-dj-cyan max-w-[140px] truncate">
+                        <option value="">全ジャンル (All)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 左下ズームコントロール & 操作ヒント -->
+            <div class="absolute bottom-3 left-3 flex flex-col sm:flex-row items-start sm:items-end gap-2 pointer-events-none">
+                <div class="pointer-events-auto flex items-center bg-dj-panel/90 backdrop-blur border border-dj-border rounded-xl p-1 shadow-lg">
+                    <button id="btn-zoom-out" class="p-1.5 hover:bg-dj-surface rounded-lg text-slate-300" title="ズームアウト">
+                        <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <span id="zoom-level" class="px-2 text-xs font-mono text-slate-400 min-w-[48px] text-center">100%</span>
+                    <button id="btn-zoom-in" class="p-1.5 hover:bg-dj-surface rounded-lg text-slate-300" title="ズームイン">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <div class="h-4 w-px bg-dj-border mx-1"></div>
+                    <button id="btn-reset-view" class="p-1.5 hover:bg-dj-surface rounded-lg text-slate-300" title="全体を表示">
+                        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-dj-panel/75 backdrop-blur border border-dj-border/60 text-[11px] text-slate-400">
+                    <span><strong class="text-slate-200">ダブルクリック:</strong> 曲追加</span>
+                    <span><strong class="text-slate-200">Shift+ドラッグ:</strong> つなぎ作成</span>
+                    <span><strong class="text-slate-200">背景ドラッグ:</strong> 移動</span>
+                </div>
+            </div>
+
+            <!-- 下部セットリスト（ルート構築）ドロワー -->
+            <div id="setlist-drawer" class="hidden absolute bottom-3 right-3 left-3 sm:left-auto sm:w-[460px] bg-dj-panel/95 backdrop-blur-md border border-dj-border rounded-2xl shadow-2xl p-3.5 z-10 transition-all">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                        <i data-lucide="list-music" class="w-4 h-4 text-dj-emerald shrink-0"></i>
+                        <select id="setlist-selector" class="bg-dj-surface border border-dj-border rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-dj-emerald truncate max-w-[175px] cursor-pointer" title="表示・編集するセトリを選択">
+                            <option value="">(未選択)</option>
+                        </select>
+                        <button type="button" id="btn-new-setlist" class="p-1 rounded-lg bg-dj-emerald/15 hover:bg-dj-emerald/25 border border-dj-emerald/40 text-dj-emerald transition shrink-0" title="新しいセトリを作成">
+                            <i data-lucide="plus" class="w-3.5 h-3.5 pointer-events-none"></i>
+                        </button>
+                        <button type="button" id="btn-rename-setlist" class="p-1 rounded-lg bg-dj-surface hover:bg-dj-border border border-dj-border text-slate-300 transition shrink-0" title="セトリ名を変更">
+                            <i data-lucide="pencil" class="w-3 h-3 pointer-events-none"></i>
+                        </button>
+                        <span id="setlist-count" class="text-[10px] font-mono px-1.5 py-0.5 bg-dj-surface rounded text-dj-emerald shrink-0">0曲</span>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" id="btn-toggle-setlist-highlight" class="px-2 py-1 rounded bg-dj-emerald/20 text-dj-emerald border border-dj-emerald/40 text-[10px] font-medium flex items-center gap-1 transition" title="選択中のセトリをキャンバスで強調表示">
+                            <i data-lucide="sparkles" class="w-3 h-3 pointer-events-none"></i>
+                            <span class="hidden sm:inline pointer-events-none">強調</span>
+                        </button>
+                        <button type="button" id="btn-copy-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-dj-border text-slate-300" title="テキストでコピー">
+                            <i data-lucide="copy" class="w-3 h-3 pointer-events-none"></i>
+                        </button>
+                        <button type="button" id="btn-clear-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-amber-500/20 text-slate-400 hover:text-amber-300" title="このセトリの曲を空にする">
+                            <i data-lucide="eraser" class="w-3 h-3 pointer-events-none"></i>
+                        </button>
+                        <button type="button" id="btn-delete-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="このセトリを削除">
+                            <i data-lucide="trash-2" class="w-3 h-3 pointer-events-none"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- BPM推移ミニスパークライン -->
+                <div id="bpm-chart-container" class="h-10 w-full bg-dj-bg/80 rounded-lg border border-dj-border/60 mb-2 px-2 py-1 flex items-center justify-between">
+                    <span class="text-[10px] text-slate-500">曲をクリックしてルートに追加...</span>
+                </div>
+
+                <!-- ルートリスト -->
+                <div id="setlist-items" class="max-h-36 overflow-y-auto space-y-1 pr-1"></div>
+            </div>
+        </div>
+
+        <!-- 右サイドバー（インスペクター） -->
+        <aside id="inspector-sidebar" class="fixed md:static inset-y-0 right-0 top-14 md:top-0 w-80 lg:w-96 bg-dj-panel border-l border-dj-border flex flex-col z-30 transform translate-x-full md:translate-x-0 transition-all duration-200 ease-out shrink-0">
+            
+            <!-- インスペクターヘッダー -->
+            <div class="px-4 py-3 border-b border-dj-border flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-dj-cyan"></i>
+                    <span id="inspector-title" class="text-xs font-bold uppercase tracking-wider text-slate-300">インスペクター</span>
+                </div>
+                <button type="button" id="btn-close-sidebar" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-dj-surface transition cursor-pointer" title="編集パネルを隠す">
+                    <i data-lucide="panel-right-close" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+            </div>
+
+            <!-- インスペクター本体（スクロール領域） -->
+            <div id="inspector-content" class="flex-1 overflow-y-auto p-4 space-y-5">
+                
+                <!-- 未選択時のダッシュボード概要 -->
+                <div id="view-empty" class="space-y-4">
+                    <div class="p-4 rounded-xl bg-dj-surface/50 border border-dj-border text-center space-y-2">
+                        <div class="w-10 h-10 rounded-full bg-dj-panel border border-dj-border mx-auto flex items-center justify-center text-dj-cyan">
+                            <i data-lucide="mouse-pointer-click" class="w-5 h-5"></i>
+                        </div>
+                        <h4 class="text-xs font-semibold text-white">曲またはつなぎ矢印を選択</h4>
+                        <p class="text-[11px] text-slate-400 leading-relaxed">
+                            キャンバス上の楽曲ノードや矢印をクリックすると、詳細情報の編集や前後ルートの確認ができます。
+                        </p>
+                    </div>
+
+                    <!-- 統計サマリー -->
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div class="p-3 rounded-xl bg-dj-surface/40 border border-dj-border">
+                            <div class="text-[11px] text-slate-400">登録楽曲数</div>
+                            <div id="stat-nodes" class="text-lg font-mono font-bold text-white mt-0.5">0</div>
+                        </div>
+                        <div class="p-3 rounded-xl bg-dj-surface/40 border border-dj-border">
+                            <div class="text-[11px] text-slate-400">つなぎパターン</div>
+                            <div id="stat-edges" class="text-lg font-mono font-bold text-dj-cyan mt-0.5">0</div>
+                        </div>
+                    </div>
+
+                    <!-- キー相性クイックガイド（Camelot） -->
+                    <div class="p-3.5 rounded-xl bg-dj-surface/30 border border-dj-border space-y-2">
+                        <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-200">
+                            <i data-lucide="music" class="w-3.5 h-3.5 text-dj-purple"></i>
+                            <span>Camelot キー相性ヒント</span>
+                        </div>
+                        <ul class="text-[11px] text-slate-400 space-y-1.5">
+                            <li class="flex justify-between"><span>同キー (例: 8A → 8A)</span><span class="text-dj-emerald font-mono">完璧な調和</span></li>
+                            <li class="flex justify-between"><span>隣接数字 (例: 8A → 7A / 9A)</span><span class="text-dj-cyan font-mono">自然な展開</span></li>
+                            <li class="flex justify-between"><span>大小調転換 (例: 8A ↔ 8B)</span><span class="text-dj-purple font-mono">雰囲気変化</span></li>
+                            <li class="flex justify-between"><span>+2 / +7 (エナジーブースト)</span><span class="text-dj-pink font-mono">盛り上げ</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- ノード（楽曲）編集フォーム -->
+                <div id="view-node" class="hidden space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-dj-cyan/10 text-dj-cyan border border-dj-cyan/30">TRACK NODE</span>
+                        <button id="btn-delete-node" class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">曲名 (Track Title) *</label>
+                            <input type="text" id="node-title" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-cyan">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">アーティスト (Artist)</label>
+                            <input type="text" id="node-artist" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-cyan">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">ジャンル (Genre)</label>
+                            <input type="text" id="node-genre" list="genre-presets" placeholder="例: House, UK Garage, Funkot..." class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-cyan">
+                            <datalist id="genre-presets">
+                                <option value="House">
+                                <option value="Tech House">
+                                <option value="Deep House">
+                                <option value="UK Garage">
+                                <option value="Drum & Bass">
+                                <option value="Hardcore">
+                                <option value="Trance">
+                                <option value="Techno">
+                                <option value="Funkot">
+                                <option value="Hip-Hop">
+                                <option value="Electro">
+                                <option value="Ambient">
+                                <option value="J-Pop / Anisong">
+                            </datalist>
+                            <!-- クイックジャンル選択チップ -->
+                            <div id="genre-quick-chips" class="flex flex-wrap gap-1 mt-1.5"></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">BPM</label>
+                                <input type="number" step="0.1" id="node-bpm" placeholder="例: 128" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-dj-cyan">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">キー (Camelot / Key)</label>
+                                <input type="text" id="node-key" placeholder="例: 8A, Am" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-dj-cyan">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1.5">カラータグ（ジャンル / 雰囲気）</label>
+                            <div id="node-colors" class="flex items-center gap-2">
+                                <!-- JSで生成 -->
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">曲メモ・特徴（イントロ/アウトロ小節数など）</label>
+                            <textarea id="node-memo" rows="3" placeholder="例: イントロ32小節ドラムのみ。ブレイク後にボーカルイン。" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-cyan resize-none"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- この曲からのつなぎ一覧 (Out-degree) -->
+                    <div class="pt-3 border-t border-dj-border space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-dj-cyan flex items-center gap-1.5">
+                                <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i> 次に行く曲 (Out)
+                            </span>
+                            <span id="out-count" class="text-[11px] font-mono text-slate-400">0</span>
+                        </div>
+                        <div id="node-out-list" class="space-y-1.5"></div>
+                    </div>
+
+                    <!-- この曲へ来るつなぎ一覧 (In-degree) -->
+                    <div class="pt-3 border-t border-dj-border space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-dj-purple flex items-center gap-1.5">
+                                <i data-lucide="arrow-down-left" class="w-3.5 h-3.5"></i> この曲へ来る曲 (In)
+                            </span>
+                            <span id="in-count" class="text-[11px] font-mono text-slate-400">0</span>
+                        </div>
+                        <div id="node-in-list" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- エッジ（つなぎ）編集フォーム -->
+                <div id="view-edge" class="hidden space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-dj-pink/10 text-dj-pink border border-dj-pink/30">TRANSITION EDGE</span>
+                        <button id="btn-delete-edge" class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10 transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
+                        </button>
+                    </div>
+
+                    <!-- 接続方向ビジュアルカード -->
+                    <div class="p-3 rounded-xl bg-dj-surface border border-dj-border space-y-2">
+                        <div class="flex items-center justify-between text-[11px] text-slate-400">
+                            <span>FROM (現在の曲)</span>
+                            <span id="edge-bpm-diff" class="font-mono text-dj-cyan"></span>
+                        </div>
+                        <div id="edge-source-name" class="text-xs font-bold text-white truncate"></div>
+                        
+                        <div class="flex items-center justify-center py-1">
+                            <button id="btn-reverse-edge" class="px-2.5 py-1 rounded-lg bg-dj-panel hover:bg-dj-border border border-dj-border text-[11px] text-slate-300 flex items-center gap-1.5 transition" title="つなぎの向きを逆転する">
+                                <i data-lucide="arrow-down" class="w-3.5 h-3.5 text-dj-pink"></i>
+                                <span>向きを反転</span>
+                            </button>
+                        </div>
+
+                        <div class="text-[11px] text-slate-400">TO (次の曲)</div>
+                        <div id="edge-target-name" class="text-xs font-bold text-white truncate"></div>
+                    </div>
+
+                    <!-- 編集フィールド -->
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">つなぎ手法・ラベル</label>
+                            <input type="text" id="edge-label" placeholder="例: ロングミックス, EQスワップ, カットイン" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-pink">
+                            <!-- クイックタグプリセット -->
+                            <div class="flex flex-wrap gap-1 mt-1.5" id="edge-presets">
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">ロングミックス</button>
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">EQスワップ</button>
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">フィルターアウト</button>
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">カットイン</button>
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">エコー飛ばし</button>
+                                <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">BPM倍取り</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">鉄板度・相性ランク</label>
+                            <div id="edge-rating-stars" class="flex items-center gap-1">
+                                <!-- JSで生成 -->
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">ラインスタイル</label>
+                                <select id="edge-style" class="w-full bg-dj-surface border border-dj-border rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-dj-pink">
+                                    <option value="solid">実線（定番・安定）</option>
+                                    <option value="dashed">破線（飛び道具・実験）</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">ラインカラー</label>
+                                <div id="edge-colors" class="flex items-center gap-1.5 h-8">
+                                    <!-- JSで生成 -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-400 mb-1">詳細なつなぎメモ</label>
+                            <textarea id="edge-memo" rows="4" placeholder="例: Aのアウトロ残り32小節からBのイントロをイン。16小節目でベースを完全に入れ替える。" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-pink resize-none"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+    </div>
+
+    <!-- カスタム確認モーダル & トースト通知 -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2"></div>
+
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <h3 id="confirm-title" class="text-sm font-bold text-white">確認</h3>
+            <p id="confirm-message" class="text-xs text-slate-300 leading-relaxed"></p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button id="confirm-cancel" class="px-3.5 py-1.5 rounded-lg bg-dj-surface hover:bg-dj-border text-xs text-slate-300">キャンセル</button>
+                <button id="confirm-ok" class="px-3.5 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-xs font-medium text-white">実行する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSONエクスポート／バックアップモーダル（サンドボックス環境対応） -->
+    <div id="export-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-3.5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="file-json" class="w-4 h-4 text-dj-cyan"></i>
+                    <span>JSONデータ出力（バックアップ）</span>
+                </h3>
+                <button id="export-close" class="p-1 text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+                プレビュー環境の制限で自動ダウンロードされない場合は、下のテキストをコピーして <code class="text-dj-cyan">.json</code> ファイルに保存してください。
+            </p>
+            <textarea id="export-json-text" readonly rows="10" class="w-full bg-dj-bg border border-dj-border rounded-xl p-3 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-dj-cyan select-all"></textarea>
+            <div class="flex flex-wrap justify-end gap-2 pt-1">
+                <button id="export-download-retry" class="px-3 py-1.5 rounded-lg bg-dj-surface hover:bg-dj-border border border-dj-border text-xs text-slate-200 flex items-center gap-1.5">
+                    <i data-lucide="download" class="w-3.5 h-3.5 text-dj-cyan"></i> 再ダウンロード
+                </button>
+                <button id="export-copy-btn" class="px-4 py-1.5 rounded-lg bg-dj-cyan hover:bg-cyan-400 text-xs font-bold text-slate-950 flex items-center gap-1.5">
+                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> JSONをコピー
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- セトリ名入力モーダル -->
+    <div id="setlist-name-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <h3 id="setlist-modal-title" class="text-sm font-bold text-white flex items-center gap-2">
+                <i data-lucide="list-music" class="w-4 h-4 text-dj-emerald"></i>
+                <span>セトリ名を入力</span>
+            </h3>
+            <input type="text" id="setlist-name-input" placeholder="例: 深夜ラウンジセット / Peak Time" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-emerald">
+            <div class="flex justify-end gap-2">
+                <button type="button" id="setlist-modal-cancel" class="px-3.5 py-1.5 rounded-lg bg-dj-surface hover:bg-dj-border text-xs text-slate-300">キャンセル</button>
+                <button type="button" id="setlist-modal-ok" class="px-4 py-1.5 rounded-lg bg-dj-emerald hover:bg-emerald-400 text-xs font-bold text-slate-950">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * DJ Transition Graph Application
+         * 有向グラフ描画・編集エンジン＆UIコントローラー
+         */
+
+        // ==========================================
+        // 1. 定数・カラーパレット・初期サンプルデータ
+        // ==========================================
+        const STORAGE_KEY = 'dj_transition_graph_v1';
+
+        const NODE_COLORS = [
+            { id: 'cyan', hex: '#06b6d4', label: 'シアン (House/Techno)' },
+            { id: 'pink', hex: '#ec4899', label: 'ピンク (Vocal/Pop)' },
+            { id: 'purple', hex: '#8b5cf6', label: 'パープル (Trance/UKG)' },
+            { id: 'amber', hex: '#f59e0b', label: 'アンバー (Jazz/Funk)' },
+            { id: 'emerald', hex: '#10b981', label: 'エメラルド (DnB/Break)' },
+            { id: 'rose', hex: '#f43f5e', label: 'ローズ (Hardcore/Rave)' },
+        ];
+
+        const EDGE_COLORS = [
+            { id: 'cyan', hex: '#06b6d4' },
+            { id: 'pink', hex: '#ec4899' },
+            { id: 'amber', hex: '#f59e0b' },
+            { id: 'emerald', hex: '#10b981' },
+            { id: 'slate', hex: '#94a3b8' },
+        ];
+
+        const QUICK_GENRES = [
+            'House', 'Tech House', 'UK Garage', 'Drum & Bass',
+            'Hardcore', 'Trance', 'Hip-Hop', 'Funkot', 'J-Pop'
+        ];
+
+        // エレクトロニック〜UKG〜ハードコア〜ジャズ/フュージョン風の架空・定番つなぎネットワーク
+        function getSampleData() {
+            return {
+                nodes: [
+                    {
+                        id: 'n1',
+                        title: 'Midnight Velvet',
+                        artist: 'Kojiro & The Groovers',
+                        genre: 'Deep House',
+                        bpm: 124,
+                        key: '8A',
+                        color: '#f59e0b',
+                        memo: 'ウォームなエレピから始まるジャジー・ディープハウス。序盤の雰囲気作りに最適。',
+                        x: -340,
+                        y: -140
+                    },
+                    {
+                        id: 'n2',
+                        title: 'Neon Shibuya 2AM',
+                        artist: 'Aether Wave',
+                        genre: 'Tech House',
+                        bpm: 128,
+                        key: '8A',
+                        color: '#06b6d4',
+                        memo: 'ベースラインが太いテックハウス。32小節のクリーンなアウトロあり。',
+                        x: -80,
+                        y: -190
+                    },
+                    {
+                        id: 'n3',
+                        title: 'Liquid Horizon',
+                        artist: 'SubSurface',
+                        genre: 'UK Garage',
+                        bpm: 132,
+                        key: '9A',
+                        color: '#8b5cf6',
+                        memo: '2ステップ調のUKガラージ。ボーカルチョップが印象的。',
+                        x: 200,
+                        y: -130
+                    },
+                    {
+                        id: 'n4',
+                        title: 'Brass & Breakbeats',
+                        artist: 'Tokyo Fusion Unit',
+                        genre: 'Breakbeats',
+                        bpm: 126,
+                        key: '7A',
+                        color: '#f59e0b',
+                        memo: '生ホーンセクションとブレイクビーツの融合。ピーク前のフックに。',
+                        x: -240,
+                        y: 120
+                    },
+                    {
+                        id: 'n5',
+                        title: 'Hyperdrive Protocol',
+                        artist: 'K-Core System',
+                        genre: 'Hardcore',
+                        bpm: 160,
+                        key: '9A',
+                        color: '#f43f5e',
+                        memo: 'レイヴスタブが炸裂するUKハードコア。一気にフロアを爆発させる切り札。',
+                        x: 340,
+                        y: 110
+                    },
+                    {
+                        id: 'n6',
+                        title: 'Cybernetic Rain',
+                        artist: 'Vortexia',
+                        genre: 'Melodic House',
+                        bpm: 130,
+                        key: '8B',
+                        color: '#ec4899',
+                        memo: 'エモーショナルなシンセリフ。メジャー感を出したい時の転換点。',
+                        x: 40,
+                        y: 90
+                    }
+                ],
+                edges: [
+                    {
+                        id: 'e1',
+                        source: 'n1',
+                        target: 'n2',
+                        label: 'ロングミックス',
+                        rating: 5,
+                        style: 'solid',
+                        color: '#06b6d4',
+                        memo: '同キー(8A)。Aのエレピループを残したままBのキックを16小節かけてフェードイン。'
+                    },
+                    {
+                        id: 'e2',
+                        source: 'n2',
+                        target: 'n3',
+                        label: 'EQスワップ (Low切替)',
+                        rating: 5,
+                        style: 'solid',
+                        color: '#06b6d4',
+                        memo: 'BPM128→132へ徐々にピッチ上げ。Bのボーカルが入る瞬間にLowを完全入れ替え。'
+                    },
+                    {
+                        id: 'e3',
+                        source: 'n3',
+                        target: 'n2',
+                        label: 'フィルターアウト',
+                        rating: 3,
+                        style: 'dashed',
+                        color: '#94a3b8',
+                        memo: '少しトーンダウンしてグルーヴに戻す時の逆ルート。ハイパスフィルター推奨。'
+                    },
+                    {
+                        id: 'e4',
+                        source: 'n1',
+                        target: 'n4',
+                        label: 'ブレイク重ね',
+                        rating: 4,
+                        style: 'solid',
+                        color: '#f59e0b',
+                        memo: 'ジャズ/フュージョン文脈の鉄板つなぎ。ホーンの入りに合わせてカットイン気味でもOK。'
+                    },
+                    {
+                        id: 'e5',
+                        source: 'n4',
+                        target: 'n6',
+                        label: 'エコー/リバーブ飛ばし',
+                        rating: 4,
+                        style: 'solid',
+                        color: '#ec4899',
+                        memo: 'ブラスの最終音に1/2ディレイをかけて残響の中でCybernetic Rainのパッドへ。'
+                    },
+                    {
+                        id: 'e6',
+                        source: 'n6',
+                        target: 'n3',
+                        label: 'ロングミックス',
+                        rating: 4,
+                        style: 'solid',
+                        color: '#06b6d4',
+                        memo: '8B→9Aのエネルギッシュな展開。ドラムパターンが噛み合うので長めに混ぜられる。'
+                    },
+                    {
+                        id: 'e7',
+                        source: 'n3',
+                        target: 'n5',
+                        label: 'BPM倍取り / ブレイク切替',
+                        rating: 5,
+                        style: 'dashed',
+                        color: '#ec4899',
+                        memo: 'Liquid Horizonの2回目のブレイク無音部分でHyperdriveのビルドアップを頭出し！'
+                    }
+                ]
+            };
+        }
+
+        // ==========================================
+        // 2. アプリケーション状態管理
+        // ==========================================
+        const state = {
+            nodes: [],
+            edges: [],
+            // 選択状態
+            selectedNodeId: null,
+            selectedEdgeId: null,
+            hoveredNodeId: null,
+            hoveredEdgeId: null,
+            // モード設定
+            connectMode: false,
+            connectSourceId: null,
+            focusMode: true,      // 選択ノードの1ホップ先を強調
+            setlistMode: false,   // クリック順ルート記録
+            setlistHighlight: true, // 選択中のセトリをキャンバスで強調表示
+            setlists: [],         // [{ id, name, trackIds: [] }]
+            activeSetlistId: null,
+            setlist: [],          // 互換用（activeSetlistのtrackIdsと同期）
+            searchQuery: '',
+            selectedGenreFilter: '',
+            // カメラ（パン＆ズーム）
+            camera: {
+                x: 0,
+                y: 0,
+                zoom: 1
+            },
+            // インタラクション状態
+            isDraggingNode: false,
+            dragNodeId: null,
+            dragOffset: { x: 0, y: 0 },
+            isPanning: false,
+            panStart: { x: 0, y: 0 },
+            isDrawingEdge: false,
+            drawEdgeSourceId: null,
+            pointerWorld: { x: 0, y: 0 },
+            pointerScreen: { x: 0, y: 0 },
+            hasMovedDuringDrag: false
+        };
+
+        // ノード描画寸法定数（ワールド座標系）
+        const NODE_WIDTH = 204;
+        const NODE_HEIGHT = 72;
+        const NODE_RADIUS = 12;
+
+        // ==========================================
+        // 3. 永続化 (LocalStorage) & ユーティリティ
+        // ==========================================
+        function getActiveSetlist() {
+            return state.setlists.find(s => s.id === state.activeSetlistId) || null;
+        }
+
+        function syncActiveSetlistArray() {
+            const active = getActiveSetlist();
+            state.setlist = active ? active.trackIds : [];
+        }
+
+        function ensureDefaultSetlist() {
+            if (!Array.isArray(state.setlists) || state.setlists.length === 0) {
+                const defaultSet = {
+                    id: generateId('sl'),
+                    name: 'メインセトリ #1',
+                    trackIds: Array.isArray(state.setlist) ? [...state.setlist] : []
+                };
+                state.setlists = [defaultSet];
+                state.activeSetlistId = defaultSet.id;
+            } else if (!state.activeSetlistId || !state.setlists.some(s => s.id === state.activeSetlistId)) {
+                state.activeSetlistId = state.setlists[0].id;
+            }
+            syncActiveSetlistArray();
+        }
+
+        function saveToStorage() {
+            try {
+                const payload = {
+                    nodes: state.nodes,
+                    edges: state.edges,
+                    setlists: state.setlists,
+                    activeSetlistId: state.activeSetlistId,
+                    setlist: state.setlist
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            } catch (e) {
+                console.warn('LocalStorage save failed:', e);
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
+                        // 後方互換性: genreフィールドがない場合は空文字で補完
+                        state.nodes = parsed.nodes.map(n => ({ genre: '', ...n }));
+                        state.edges = parsed.edges;
+                        if (Array.isArray(parsed.setlists) && parsed.setlists.length > 0) {
+                            state.setlists = parsed.setlists;
+                            state.activeSetlistId = parsed.activeSetlistId || parsed.setlists[0].id;
+                        } else {
+                            state.setlist = Array.isArray(parsed.setlist) ? parsed.setlist : [];
+                            state.setlists = [];
+                            state.activeSetlistId = null;
+                        }
+                        ensureDefaultSetlist();
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('LocalStorage load failed:', e);
+            }
+            return false;
+        }
+
+        function generateId(prefix) {
+            return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'px-4 py-2 rounded-full bg-dj-surface/95 border border-dj-cyan/40 text-xs text-white shadow-xl backdrop-blur-md transition-opacity duration-300';
+            el.textContent = message;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 2400);
+        }
+
+        function showConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            modal.classList.remove('hidden');
+
+            const btnOk = document.getElementById('confirm-ok');
+            const btnCancel = document.getElementById('confirm-cancel');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                btnOk.onclick = null;
+                btnCancel.onclick = null;
+            };
+
+            btnCancel.onclick = cleanup;
+            btnOk.onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+        }
+
+        // ==========================================
+        // 4. Canvas セットアップ & 座標変換
+        // ==========================================
+        const canvas = document.getElementById('graph-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            render();
+        }
+
+        function screenToWorld(sx, sy) {
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            return {
+                x: (sx - cx - state.camera.x) / state.camera.zoom,
+                y: (sy - cy - state.camera.y) / state.camera.zoom
+            };
+        }
+
+        function worldToScreen(wx, wy) {
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            return {
+                x: wx * state.camera.zoom + cx + state.camera.x,
+                y: wy * state.camera.zoom + cy + state.camera.y
+            };
+        }
+
+        function fitGraphToScreen() {
+            if (state.nodes.length === 0) {
+                state.camera = { x: 0, y: 0, zoom: 1 };
+                updateZoomLabel();
+                render();
+                return;
+            }
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            state.nodes.forEach(n => {
+                minX = Math.min(minX, n.x - NODE_WIDTH / 2);
+                maxX = Math.max(maxX, n.x + NODE_WIDTH / 2);
+                minY = Math.min(minY, n.y - NODE_HEIGHT / 2);
+                maxY = Math.max(maxY, n.y + NODE_HEIGHT / 2);
+            });
+
+            const rect = container.getBoundingClientRect();
+            const padding = 100;
+            const graphW = Math.max(maxX - minX, 200);
+            const graphH = Math.max(maxY - minY, 200);
+            const scaleX = (rect.width - padding * 2) / graphW;
+            const scaleY = (rect.height - padding * 2) / graphH;
+            const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.35), 1.35);
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            state.camera.zoom = zoom;
+            state.camera.x = -centerX * zoom;
+            state.camera.y = -centerY * zoom;
+            updateZoomLabel();
+            render();
+        }
+
+        function updateZoomLabel() {
+            document.getElementById('zoom-level').textContent = `${Math.round(state.camera.zoom * 100)}%`;
+        }
+
+        function focusCameraOnEdge(edge) {
+            const src = state.nodes.find(n => n.id === edge.source);
+            const tgt = state.nodes.find(n => n.id === edge.target);
+            if (!src || !tgt) return;
+            const midX = (src.x + tgt.x) / 2;
+            const midY = (src.y + tgt.y) / 2;
+            state.camera.x = -midX * state.camera.zoom;
+            state.camera.y = -midY * state.camera.zoom;
+            render();
+        }
+
+        // ==========================================
+        // 5. 幾何計算（ベジェ曲線・矩形交点・ヒットテスト）
+        // ==========================================
+
+        /**
+         * 双方向エッジが存在する場合に曲線を左右にずらすためのオフセット量を算出
+         */
+        function getEdgeCurveOffset(edge) {
+            const hasReverse = state.edges.some(
+                e => e.id !== edge.id && e.source === edge.target && e.target === edge.source
+            );
+            const sameDirEdges = state.edges.filter(
+                e => e.source === edge.source && e.target === edge.target
+            );
+            const dirIndex = sameDirEdges.findIndex(e => e.id === edge.id);
+
+            let offset = 0;
+            if (hasReverse) {
+                offset += 34;
+            }
+            if (sameDirEdges.length > 1) {
+                offset += (dirIndex - (sameDirEdges.length - 1) / 2) * 32;
+            }
+            return offset;
+        }
+
+        /**
+         * 二次ベジェ曲線の制御点・始点・終点（ノード矩形外周との交点）を計算
+         */
+        function computeEdgeGeometry(edge) {
+            const src = state.nodes.find(n => n.id === edge.source);
+            const tgt = state.nodes.find(n => n.id === edge.target);
+            if (!src || !tgt) return null;
+
+            const dx = tgt.x - src.x;
+            const dy = tgt.y - src.y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const nx = -dy / dist;
+            const ny = dx / dist;
+
+            const curveOffset = getEdgeCurveOffset(edge);
+            const midX = (src.x + tgt.x) / 2 + nx * curveOffset;
+            const midY = (src.y + tgt.y) / 2 + ny * curveOffset;
+
+            const start = clipLineToRect(src.x, src.y, midX, midY, NODE_WIDTH + 6, NODE_HEIGHT + 6);
+            const end = clipLineToRect(tgt.x, tgt.y, midX, midY, NODE_WIDTH + 10, NODE_HEIGHT + 10);
+
+            const labelX = 0.25 * start.x + 0.5 * midX + 0.25 * end.x;
+            const labelY = 0.25 * start.y + 0.5 * midY + 0.25 * end.y;
+
+            return { start, control: { x: midX, y: midY }, end, labelPos: { x: labelX, y: labelY } };
+        }
+
+        function clipLineToRect(cx, cy, tx, ty, w, h) {
+            const dx = tx - cx;
+            const dy = ty - cy;
+            if (dx === 0 && dy === 0) return { x: cx, y: cy };
+
+            const halfW = w / 2;
+            const halfH = h / 2;
+            const scaleX = Math.abs(dx) > 0 ? halfW / Math.abs(dx) : Infinity;
+            const scaleY = Math.abs(dy) > 0 ? halfH / Math.abs(dy) : Infinity;
+            const t = Math.min(scaleX, scaleY);
+
+            return {
+                x: cx + dx * t,
+                y: cy + dy * t
+            };
+        }
+
+        function getNodeAt(wx, wy) {
+            for (let i = state.nodes.length - 1; i >= 0; i--) {
+                const n = state.nodes[i];
+                if (
+                    wx >= n.x - NODE_WIDTH / 2 &&
+                    wx <= n.x + NODE_WIDTH / 2 &&
+                    wy >= n.y - NODE_HEIGHT / 2 &&
+                    wy <= n.y + NODE_HEIGHT / 2
+                ) {
+                    return n;
+                }
+            }
+            return null;
+        }
+
+        function getEdgeAt(wx, wy) {
+            const threshold = 10 / state.camera.zoom;
+            for (let i = state.edges.length - 1; i >= 0; i--) {
+                const edge = state.edges[i];
+                const geom = computeEdgeGeometry(edge);
+                if (!geom) continue;
+
+                if (Math.hypot(wx - geom.labelPos.x, wy - geom.labelPos.y) < threshold + 16) {
+                    return edge;
+                }
+
+                const steps = 24;
+                for (let s = 0; s <= steps; s++) {
+                    const t = s / steps;
+                    const mt = 1 - t;
+                    const px = mt * mt * geom.start.x + 2 * mt * t * geom.control.x + t * t * geom.end.x;
+                    const py = mt * mt * geom.start.y + 2 * mt * t * geom.control.y + t * t * geom.end.y;
+                    if (Math.hypot(wx - px, wy - py) <= threshold) {
+                        return edge;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // ==========================================
+        // 6. レンダリングエンジン (HTML5 Canvas)
+        // ==========================================
+        function roundRectPath(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        // 検索・ジャンルフィルターマッチ判定（スペース区切りAND検索対応）
+        function isNodeMatched(node) {
+            if (state.selectedGenreFilter) {
+                const nodeGenre = (node.genre || '').trim();
+                if (nodeGenre !== state.selectedGenreFilter) {
+                    return false;
+                }
+            }
+
+            const rawQuery = state.searchQuery.trim().toLowerCase();
+            if (!rawQuery) return true;
+
+            const terms = rawQuery.split(/\s+/);
+            const searchableText = [
+                node.title || '',
+                node.artist || '',
+                node.memo || '',
+                node.genre || '',
+                node.bpm !== undefined && node.bpm !== '' ? String(node.bpm) : '',
+                node.key || ''
+            ].join(' ').toLowerCase();
+
+            return terms.every(term => searchableText.includes(term));
+        }
+
+        function isEdgeMatched(edge) {
+            const rawQuery = state.searchQuery.trim().toLowerCase();
+            if (!rawQuery) return false;
+            const terms = rawQuery.split(/\s+/);
+            const searchableText = [
+                edge.label || '',
+                edge.memo || ''
+            ].join(' ').toLowerCase();
+            return terms.every(term => searchableText.includes(term));
+        }
+
+        function updateSearchCountBadge() {
+            const badge = document.getElementById('search-match-count');
+            if (!badge) return;
+            const hasText = state.searchQuery.trim().length > 0;
+            const hasGenre = state.selectedGenreFilter !== '';
+            if (!hasText && !hasGenre) {
+                badge.classList.add('hidden');
+                return;
+            }
+            const matchedCount = state.nodes.filter(n => isNodeMatched(n)).length;
+            badge.textContent = `${matchedCount}件`;
+            badge.classList.remove('hidden');
+        }
+
+        // フォーカスモード＆セトリ強調時の関連性判定
+        function getFocusVisibility() {
+            const hasTextSearch = state.searchQuery.trim().length > 0;
+            const hasSearch = hasTextSearch || state.selectedGenreFilter !== '';
+            const activeNodeId = state.selectedNodeId;
+
+            // セトリ強調モード（ルート記録ドロワー表示中 かつ 強調ON かつ 1曲以上登録済み）
+            const useSetlistHighlight = state.setlistMode && state.setlistHighlight && state.setlist.length > 0 && !hasSearch;
+            const setlistNodeSet = new Set();
+            const setlistEdgeSet = new Set();
+
+            if (useSetlistHighlight) {
+                state.setlist.forEach(id => setlistNodeSet.add(id));
+                for (let i = 0; i < state.setlist.length - 1; i++) {
+                    const srcId = state.setlist[i];
+                    const tgtId = state.setlist[i + 1];
+                    state.edges.forEach(e => {
+                        if (e.source === srcId && e.target === tgtId) {
+                            setlistEdgeSet.add(e.id);
+                        }
+                    });
+                }
+            }
+
+            // 検索中・セトリ強調中はフォーカスモードの暗転を一時解除
+            const useFocus = state.focusMode && activeNodeId !== null && !hasSearch && !useSetlistHighlight;
+
+            const highlightedNodes = new Set();
+            const highlightedEdges = new Set();
+
+            if (useFocus) {
+                highlightedNodes.add(activeNodeId);
+                state.edges.forEach(e => {
+                    if (e.source === activeNodeId || e.target === activeNodeId) {
+                        highlightedEdges.add(e.id);
+                        highlightedNodes.add(e.source);
+                        highlightedNodes.add(e.target);
+                    }
+                });
+            }
+
+            return {
+                hasTextSearch,
+                hasSearch,
+                useFocus,
+                highlightedNodes,
+                highlightedEdges,
+                useSetlistHighlight,
+                setlistNodeSet,
+                setlistEdgeSet
+            };
+        }
+
+        function drawGrid(width, height) {
+            const step = 40 * state.camera.zoom;
+            if (step < 10) return;
+
+            const offsetX = (width / 2 + state.camera.x) % step;
+            const offsetY = (height / 2 + state.camera.y) % step;
+
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+            for (let x = offsetX; x < width; x += step) {
+                for (let y = offsetY; y < height; y += step) {
+                    ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+                }
+            }
+        }
+
+        function render() {
+            const rect = container.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // 背景ドットグリッド
+            drawGrid(width, height);
+
+            ctx.save();
+            ctx.translate(width / 2 + state.camera.x, height / 2 + state.camera.y);
+            ctx.scale(state.camera.zoom, state.camera.zoom);
+
+            const {
+                hasTextSearch,
+                hasSearch,
+                useFocus,
+                highlightedNodes,
+                highlightedEdges,
+                useSetlistHighlight,
+                setlistNodeSet,
+                setlistEdgeSet
+            } = getFocusVisibility();
+
+            // 1. エッジ（つなぎ矢印）描画
+            state.edges.forEach(edge => {
+                const geom = computeEdgeGeometry(edge);
+                if (!geom) return;
+
+                const isSelected = edge.id === state.selectedEdgeId;
+                const isHovered = edge.id === state.hoveredEdgeId;
+                const isOutOfSelected = state.selectedNodeId && edge.source === state.selectedNodeId;
+                const edgeSearchHit = hasTextSearch && isEdgeMatched(edge);
+                const isSetlistEdge = useSetlistHighlight && setlistEdgeSet.has(edge.id);
+
+                let alpha = 0.85;
+                if (useSetlistHighlight && !isSetlistEdge && !isSelected) {
+                    alpha = 0.14;
+                } else if (useFocus && !highlightedEdges.has(edge.id) && !isSelected) {
+                    alpha = 0.14;
+                } else if (hasSearch) {
+                    const srcMatch = isNodeMatched(state.nodes.find(n => n.id === edge.source) || { title: '' });
+                    const tgtMatch = isNodeMatched(state.nodes.find(n => n.id === edge.target) || { title: '' });
+                    if (!srcMatch && !tgtMatch && !edgeSearchHit) alpha = 0.16;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+
+                const strokeColor = isSelected
+                    ? '#ffffff'
+                    : (isSetlistEdge
+                        ? '#10b981'
+                        : (edgeSearchHit ? '#22d3ee' : (isOutOfSelected ? '#06b6d4' : (edge.color || '#06b6d4'))));
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = isSelected || isHovered || edgeSearchHit || isSetlistEdge ? 3.2 : (isOutOfSelected ? 2.5 : 1.8);
+
+                if (edge.style === 'dashed') {
+                    ctx.setLineDash([6, 5]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+
+                if (isSelected || isOutOfSelected || edgeSearchHit || isSetlistEdge) {
+                    ctx.shadowColor = strokeColor;
+                    ctx.shadowBlur = 12;
+                }
+
+                // ベジェ曲線本体
+                ctx.beginPath();
+                ctx.moveTo(geom.start.x, geom.start.y);
+                ctx.quadraticCurveTo(geom.control.x, geom.control.y, geom.end.x, geom.end.y);
+                ctx.stroke();
+
+                // 矢印ヘッド
+                ctx.setLineDash([]);
+                const angle = Math.atan2(geom.end.y - geom.control.y, geom.end.x - geom.control.x);
+                const headLen = isSelected || isHovered || edgeSearchHit ? 12 : 10;
+                ctx.fillStyle = strokeColor;
+                ctx.beginPath();
+                ctx.moveTo(geom.end.x, geom.end.y);
+                ctx.lineTo(
+                    geom.end.x - headLen * Math.cos(angle - Math.PI / 6),
+                    geom.end.y - headLen * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    geom.end.x - headLen * Math.cos(angle + Math.PI / 6),
+                    geom.end.y - headLen * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // エッジラベルバッジ描画
+                const labelText = (edge.label || '').trim();
+                const stars = edge.rating ? `★${edge.rating}` : '';
+                const fullText = [labelText, stars].filter(Boolean).join(' ');
+
+                if (fullText) {
+                    ctx.font = '500 10px Inter, sans-serif';
+                    const textMetrics = ctx.measureText(fullText);
+                    const badgeW = textMetrics.width + 14;
+                    const badgeH = 20;
+                    const bx = geom.labelPos.x - badgeW / 2;
+                    const by = geom.labelPos.y - badgeH / 2;
+
+                    roundRectPath(ctx, bx, by, badgeW, badgeH, 6);
+                    ctx.fillStyle = isSelected ? '#ec4899' : '#12141d';
+                    ctx.fill();
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = isSelected ? '#fbcfe8' : strokeColor;
+                    ctx.stroke();
+
+                    ctx.fillStyle = isSelected ? '#ffffff' : '#e2e8f0';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(fullText, geom.labelPos.x, geom.labelPos.y + 0.5);
+                }
+
+                ctx.restore();
+            });
+
+            // 2. ドラッグ中の仮つなぎライン描画
+            if (state.isDrawingEdge && state.drawEdgeSourceId) {
+                const src = state.nodes.find(n => n.id === state.drawEdgeSourceId);
+                if (src) {
+                    ctx.save();
+                    ctx.strokeStyle = '#ec4899';
+                    ctx.lineWidth = 2.5;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(src.x, src.y);
+                    ctx.lineTo(state.pointerWorld.x, state.pointerWorld.y);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ec4899';
+                    ctx.beginPath();
+                    ctx.arc(state.pointerWorld.x, state.pointerWorld.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // 3. ノード（楽曲カード）描画
+            state.nodes.forEach(node => {
+                const isSelected = node.id === state.selectedNodeId;
+                const isHovered = node.id === state.hoveredNodeId;
+                const isConnectSource = node.id === state.connectSourceId;
+                const setlistIndices = [];
+                state.setlist.forEach((id, i) => {
+                    if (id === node.id) setlistIndices.push(i + 1);
+                });
+                const isSetlistMember = useSetlistHighlight && setlistNodeSet.has(node.id);
+                const isSearchHighlight = hasSearch && isNodeMatched(node);
+
+                let alpha = 1;
+                if (useSetlistHighlight && !isSetlistMember && !isSelected) {
+                    alpha = 0.18;
+                } else if (useFocus && !highlightedNodes.has(node.id)) {
+                    alpha = 0.22;
+                } else if (hasSearch && !isSearchHighlight) {
+                    alpha = 0.16;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+
+                const x = node.x - NODE_WIDTH / 2;
+                const y = node.y - NODE_HEIGHT / 2;
+                const accentColor = node.color || '#06b6d4';
+
+                // 選択/セトリ強調/検索ヒット/ホバー時の外周グロー
+                if (isSelected || isConnectSource) {
+                    ctx.shadowColor = isConnectSource ? '#ec4899' : accentColor;
+                    ctx.shadowBlur = 18;
+                } else if (isSetlistMember) {
+                    ctx.shadowColor = '#10b981';
+                    ctx.shadowBlur = 20;
+                } else if (isSearchHighlight) {
+                    ctx.shadowColor = '#06b6d4';
+                    ctx.shadowBlur = 18;
+                } else if (isHovered) {
+                    ctx.shadowColor = 'rgba(255,255,255,0.18)';
+                    ctx.shadowBlur = 12;
+                }
+
+                // カード本体背景
+                roundRectPath(ctx, x, y, NODE_WIDTH, NODE_HEIGHT, NODE_RADIUS);
+                ctx.fillStyle = isSelected ? '#1e2336' : (isSetlistMember ? '#142926' : (isSearchHighlight ? '#182234' : '#151824'));
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // 枠線
+                ctx.lineWidth = isSelected || isConnectSource || isSearchHighlight || isSetlistMember ? 2.2 : 1.2;
+                ctx.strokeStyle = isConnectSource
+                    ? '#ec4899'
+                    : (isSelected ? '#ffffff' : (isSetlistMember ? '#10b981' : (isSearchHighlight ? '#22d3ee' : (isHovered ? accentColor : '#2a2f45'))));
+                ctx.stroke();
+
+                // 左端カラーアクセントバー
+                ctx.save();
+                roundRectPath(ctx, x, y, NODE_WIDTH, NODE_HEIGHT, NODE_RADIUS);
+                ctx.clip();
+                ctx.fillStyle = accentColor;
+                ctx.fillRect(x, y, 5, NODE_HEIGHT);
+                ctx.restore();
+
+                // 曲名（1行省略付き）
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '600 12.5px Inter, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                const maxTextW = NODE_WIDTH - 24;
+                let titleText = node.title || 'Untitled';
+                if (ctx.measureText(titleText).width > maxTextW) {
+                    while (titleText.length > 0 && ctx.measureText(titleText + '…').width > maxTextW) {
+                        titleText = titleText.slice(0, -1);
+                    }
+                    titleText += '…';
+                }
+                ctx.fillText(titleText, x + 14, y + 11);
+
+                // アーティスト名
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '400 10.5px Inter, sans-serif';
+                let artistText = node.artist || 'Unknown Artist';
+                if (ctx.measureText(artistText).width > maxTextW) {
+                    while (artistText.length > 0 && ctx.measureText(artistText + '…').width > maxTextW) {
+                        artistText = artistText.slice(0, -1);
+                    }
+                    artistText += '…';
+                }
+                ctx.fillText(artistText, x + 14, y + 28);
+
+                // 下部メタバッジ（BPM & キー & ジャンル）
+                const bpmText = `${node.bpm || '---'} BPM`;
+                ctx.font = '700 10px "JetBrains Mono", monospace';
+                const bpmW = ctx.measureText(bpmText).width + 10;
+                roundRectPath(ctx, x + 14, y + 47, bpmW, 17, 4);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+                ctx.fill();
+                ctx.fillStyle = '#cbd5e1';
+                ctx.fillText(bpmText, x + 19, y + 50);
+
+                let cursorX = x + 14 + bpmW + 5;
+
+                if (node.key) {
+                    const keyText = node.key;
+                    const keyW = ctx.measureText(keyText).width + 10;
+                    roundRectPath(ctx, cursorX, y + 47, keyW, 17, 4);
+                    ctx.fillStyle = `${accentColor}26`;
+                    ctx.fill();
+                    ctx.fillStyle = accentColor;
+                    ctx.fillText(keyText, cursorX + 5, y + 50);
+                    cursorX += keyW + 5;
+                }
+
+                // ジャンルピルバッジ表示
+                if (node.genre && node.genre.trim()) {
+                    ctx.font = '600 9.5px Inter, sans-serif';
+                    let genreText = node.genre.trim();
+                    const maxGenreW = (x + NODE_WIDTH - 18) - cursorX;
+                    if (maxGenreW > 24) {
+                        if (ctx.measureText(genreText).width + 10 > maxGenreW) {
+                            while (genreText.length > 0 && ctx.measureText(genreText + '…').width + 10 > maxGenreW) {
+                                genreText = genreText.slice(0, -1);
+                            }
+                            genreText += '…';
+                        }
+                        const genreW = ctx.measureText(genreText).width + 10;
+                        roundRectPath(ctx, cursorX, y + 47, genreW, 17, 8.5);
+                        ctx.fillStyle = 'rgba(139, 92, 246, 0.18)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(139, 92, 246, 0.45)';
+                        ctx.lineWidth = 0.8;
+                        ctx.stroke();
+                        ctx.fillStyle = '#ddd6fe';
+                        ctx.fillText(genreText, cursorX + 5, y + 50.5);
+                    }
+                }
+
+                // メモ存在インジケーター（右下小さなアイコン点）
+                if (node.memo && node.memo.trim()) {
+                    ctx.fillStyle = accentColor;
+                    ctx.beginPath();
+                    ctx.arc(x + NODE_WIDTH - 12, y + NODE_HEIGHT - 12, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // セットリスト順番バッジ（ルート記録モード時）
+                if (state.setlistMode && setlistIndices.length > 0) {
+                    const orderText = setlistIndices.join(',');
+                    ctx.font = '700 10px "JetBrains Mono", monospace';
+                    const badgeW = Math.max(22, ctx.measureText(orderText).width + 10);
+                    const badgeH = 20;
+                    const bx = x + NODE_WIDTH - badgeW + 6;
+                    const by = y - 6;
+
+                    roundRectPath(ctx, bx, by, badgeW, badgeH, 10);
+                    ctx.fillStyle = '#10b981';
+                    ctx.fill();
+                    ctx.strokeStyle = '#090a0f';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#090a0f';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(orderText, bx + badgeW / 2, by + badgeH / 2 + 0.5);
+                }
+
+                ctx.restore();
+            });
+
+            ctx.restore();
+        }
+
+        // ==========================================
+        // 7. グラフ操作ロジック（CRUD）
+        // ==========================================
+        function addNode(wx, wy, customProps = {}) {
+            const newNode = {
+                id: generateId('n'),
+                title: customProps.title || `New Track ${state.nodes.length + 1}`,
+                artist: customProps.artist || '',
+                genre: customProps.genre || '',
+                bpm: customProps.bpm ?? '',
+                key: customProps.key ?? '',
+                color: customProps.color || '#06b6d4',
+                memo: customProps.memo || '',
+                x: Math.round(wx),
+                y: Math.round(wy)
+            };
+            state.nodes.push(newNode);
+            selectNode(newNode.id);
+            updateGenreFilterOptions();
+            updateSearchCountBadge();
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+            showToast('楽曲ノードを追加しました');
+            return newNode;
+        }
+
+        function deleteNode(nodeId) {
+            state.nodes = state.nodes.filter(n => n.id !== nodeId);
+            state.edges = state.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+            state.setlists.forEach(sl => {
+                sl.trackIds = sl.trackIds.filter(id => id !== nodeId);
+            });
+            syncActiveSetlistArray();
+            if (state.selectedNodeId === nodeId) state.selectedNodeId = null;
+            updateGenreFilterOptions();
+            updateSearchCountBadge();
+            updateInspector();
+            updateTransitionListUI();
+            updateSetlistUI();
+            saveToStorage();
+            render();
+            showToast('楽曲を削除しました');
+        }
+
+        function addEdge(sourceId, targetId) {
+            if (!sourceId || !targetId || sourceId === targetId) return null;
+
+            const newEdge = {
+                id: generateId('e'),
+                source: sourceId,
+                target: targetId,
+                label: '',
+                rating: 0,
+                style: 'solid',
+                color: '#06b6d4',
+                memo: ''
+            };
+            state.edges.push(newEdge);
+            selectEdge(newEdge.id);
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+            showToast('つなぎルートを作成しました');
+            return newEdge;
+        }
+
+        function deleteEdge(edgeId) {
+            state.edges = state.edges.filter(e => e.id !== edgeId);
+            if (state.selectedEdgeId === edgeId) state.selectedEdgeId = null;
+            updateInspector();
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+            showToast('つなぎを削除しました');
+        }
+
+        function reverseEdge(edgeId) {
+            const edge = state.edges.find(e => e.id === edgeId);
+            if (!edge) return;
+            const tmp = edge.source;
+            edge.source = edge.target;
+            edge.target = tmp;
+            updateInspector();
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+            showToast('つなぎの向きを反転しました');
+        }
+
+        // ==========================================
+        // 8. 選択 & 左右サイドバー・インスペクターUI同期
+        // ==========================================
+        function selectNode(nodeId) {
+            state.selectedNodeId = nodeId;
+            state.selectedEdgeId = null;
+            if (state.setlistMode && nodeId) {
+                appendToSetlist(nodeId);
+            }
+            updateInspector();
+            updateTransitionListUI();
+            openSidebar();
+            render();
+        }
+
+        function selectEdge(edgeId) {
+            state.selectedEdgeId = edgeId;
+            state.selectedNodeId = null;
+            updateInspector();
+            updateTransitionListUI();
+            openSidebar();
+            render();
+        }
+
+        function clearSelection() {
+            state.selectedNodeId = null;
+            state.selectedEdgeId = null;
+            updateInspector();
+            updateTransitionListUI();
+            render();
+        }
+
+        function isLeftSidebarOpen() {
+            const sidebar = document.getElementById('transition-list-sidebar');
+            if (!sidebar) return false;
+            if (window.innerWidth >= 768) {
+                return !sidebar.classList.contains('md:hidden');
+            }
+            return !sidebar.classList.contains('-translate-x-full');
+        }
+
+        function syncLeftSidebarToggleButton() {
+            const btn = document.getElementById('btn-toggle-left-sidebar');
+            if (!btn) return;
+            const open = isLeftSidebarOpen();
+            if (open) {
+                btn.classList.add('bg-dj-cyan/15', 'text-dj-cyan', 'border-dj-cyan/40');
+                btn.classList.remove('bg-dj-surface', 'text-slate-300', 'border-dj-border');
+                btn.title = 'つなぎ一覧パネルを非表示にする';
+                btn.innerHTML = '<i data-lucide="panel-left-close" class="w-4 h-4 pointer-events-none"></i>';
+            } else {
+                btn.classList.remove('bg-dj-cyan/15', 'text-dj-cyan', 'border-dj-cyan/40');
+                btn.classList.add('bg-dj-surface', 'text-slate-300', 'border-dj-border');
+                btn.title = 'つなぎ一覧パネルを表示する';
+                btn.innerHTML = '<i data-lucide="panel-left-open" class="w-4 h-4 pointer-events-none"></i>';
+            }
+            lucide.createIcons();
+        }
+
+        function openLeftSidebar() {
+            const sidebar = document.getElementById('transition-list-sidebar');
+            if (!sidebar) return;
+            sidebar.classList.remove('-translate-x-full', 'md:hidden');
+            syncLeftSidebarToggleButton();
+            resizeCanvas();
+        }
+
+        function closeLeftSidebar() {
+            const sidebar = document.getElementById('transition-list-sidebar');
+            if (!sidebar) return;
+            sidebar.classList.add('-translate-x-full', 'md:hidden');
+            syncLeftSidebarToggleButton();
+            resizeCanvas();
+        }
+
+        function toggleLeftSidebar() {
+            if (isLeftSidebarOpen()) {
+                closeLeftSidebar();
+            } else {
+                openLeftSidebar();
+            }
+        }
+
+        function updateTransitionListUI() {
+            const listEl = document.getElementById('transition-list-items');
+            const countEl = document.getElementById('transition-list-count');
+            const filterInput = document.getElementById('transition-list-filter');
+            const sortSelect = document.getElementById('transition-list-sort');
+            if (!listEl || !countEl) return;
+
+            const query = (filterInput ? filterInput.value : '').trim().toLowerCase();
+            const sortMode = sortSelect ? sortSelect.value : 'recent';
+
+            let enriched = state.edges.map((edge, idx) => {
+                const src = state.nodes.find(n => n.id === edge.source);
+                const tgt = state.nodes.find(n => n.id === edge.target);
+                return { edge, src, tgt, index: idx };
+            }).filter(item => item.src && item.tgt);
+
+            if (query) {
+                const terms = query.split(/\s+/);
+                enriched = enriched.filter(({ edge, src, tgt }) => {
+                    const blob = [
+                        src.title, src.artist, src.genre,
+                        tgt.title, tgt.artist, tgt.genre,
+                        edge.label, edge.memo
+                    ].filter(Boolean).join(' ').toLowerCase();
+                    return terms.every(t => blob.includes(t));
+                });
+            }
+
+            if (sortMode === 'recent') {
+                enriched.sort((a, b) => b.index - a.index);
+            } else if (sortMode === 'rating') {
+                enriched.sort((a, b) => (b.edge.rating || 0) - (a.edge.rating || 0) || b.index - a.index);
+            } else if (sortMode === 'source') {
+                enriched.sort((a, b) => (a.src.title || '').localeCompare(b.src.title || ''));
+            } else if (sortMode === 'bpm') {
+                enriched.sort((a, b) => (Number(a.src.bpm) || 999) - (Number(b.src.bpm) || 999));
+            }
+
+            countEl.textContent = enriched.length;
+            listEl.innerHTML = '';
+
+            if (enriched.length === 0) {
+                listEl.innerHTML = `
+                    <div class="p-4 text-center text-[11px] text-slate-500 border border-dashed border-dj-border rounded-xl">
+                        ${state.edges.length === 0 ? 'つなぎがまだ登録されていません。<br>Shift+ドラッグで曲同士を結んでみましょう。' : '条件に一致するつなぎがありません。'}
+                    </div>
+                `;
+                return;
+            }
+
+            enriched.forEach(({ edge, src, tgt }) => {
+                const isSelected = state.selectedEdgeId === edge.id;
+                const isNodeRelated = state.selectedNodeId && (edge.source === state.selectedNodeId || edge.target === state.selectedNodeId);
+
+                const card = document.createElement('div');
+                card.className = `p-2.5 rounded-xl border transition cursor-pointer space-y-1.5 ${
+                    isSelected
+                        ? 'bg-dj-pink/15 border-dj-pink shadow-md'
+                        : (isNodeRelated
+                            ? 'bg-dj-surface border-dj-cyan/50 hover:border-dj-cyan'
+                            : 'bg-dj-surface/60 border-dj-border hover:bg-dj-surface hover:border-slate-600')
+                }`;
+
+                const starsHtml = edge.rating
+                    ? `<span class="text-[10px] font-mono text-amber-400 shrink-0">${'★'.repeat(edge.rating)}</span>`
+                    : '';
+
+                const labelBadge = edge.label
+                    ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-dj-panel border border-dj-border text-dj-cyan truncate max-w-[140px]">${escapeHtml(edge.label)}</span>`
+                    : `<span class="text-[10px] text-slate-500 italic">手法未設定</span>`;
+
+                const memoHtml = edge.memo && edge.memo.trim()
+                    ? `<div class="text-[10px] text-slate-400 line-clamp-2 leading-snug pt-0.5 border-t border-dj-border/50">${escapeHtml(edge.memo)}</div>`
+                    : '';
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between gap-1.5">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <span class="w-2 h-2 rounded-full shrink-0" style="background-color: ${edge.color || '#06b6d4'}"></span>
+                            ${labelBadge}
+                        </div>
+                        ${starsHtml}
+                    </div>
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-1 text-[11px]">
+                            <span class="font-medium text-white truncate">${escapeHtml(src.title)}</span>
+                            <span class="font-mono text-[9.5px] text-slate-400 shrink-0">${src.bpm || '---'} / ${escapeHtml(src.key || '-')}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-[10px] text-slate-400 pl-1">
+                            <i data-lucide="corner-down-right" class="w-3 h-3 text-dj-pink shrink-0"></i>
+                            <span class="font-medium text-slate-200 truncate flex-1">${escapeHtml(tgt.title)}</span>
+                            <span class="font-mono text-[9.5px] text-slate-400 shrink-0">${tgt.bpm || '---'} / ${escapeHtml(tgt.key || '-')}</span>
+                        </div>
+                    </div>
+                    ${memoHtml}
+                `;
+
+                card.onclick = () => {
+                    selectEdge(edge.id);
+                    focusCameraOnEdge(edge);
+                    if (window.innerWidth < 768) {
+                        closeLeftSidebar();
+                    }
+                };
+
+                listEl.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        function isSidebarOpen() {
+            const sidebar = document.getElementById('inspector-sidebar');
+            if (!sidebar) return false;
+            if (window.innerWidth >= 768) {
+                return !sidebar.classList.contains('md:hidden');
+            }
+            return !sidebar.classList.contains('translate-x-full');
+        }
+
+        function syncSidebarToggleButton() {
+            const btn = document.getElementById('btn-toggle-sidebar');
+            if (!btn) return;
+            const open = isSidebarOpen();
+            if (open) {
+                btn.classList.add('bg-dj-cyan/15', 'text-dj-cyan', 'border-dj-cyan/40');
+                btn.classList.remove('bg-dj-surface', 'text-slate-300', 'border-dj-border');
+                btn.title = '編集パネルを非表示にする';
+                btn.innerHTML = '<i data-lucide="panel-right-close" class="w-4 h-4 pointer-events-none"></i>';
+            } else {
+                btn.classList.remove('bg-dj-cyan/15', 'text-dj-cyan', 'border-dj-cyan/40');
+                btn.classList.add('bg-dj-surface', 'text-slate-300', 'border-dj-border');
+                btn.title = '編集パネルを表示する';
+                btn.innerHTML = '<i data-lucide="panel-right-open" class="w-4 h-4 pointer-events-none"></i>';
+            }
+            lucide.createIcons();
+        }
+
+        function openSidebar() {
+            const sidebar = document.getElementById('inspector-sidebar');
+            if (!sidebar) return;
+            sidebar.classList.remove('translate-x-full', 'md:hidden');
+            syncSidebarToggleButton();
+            resizeCanvas();
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('inspector-sidebar');
+            if (!sidebar) return;
+            sidebar.classList.add('translate-x-full', 'md:hidden');
+            syncSidebarToggleButton();
+            resizeCanvas();
+        }
+
+        function toggleSidebar() {
+            if (isSidebarOpen()) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        }
+
+        function updateInspector() {
+            const viewEmpty = document.getElementById('view-empty');
+            const viewNode = document.getElementById('view-node');
+            const viewEdge = document.getElementById('view-edge');
+            const titleEl = document.getElementById('inspector-title');
+
+            document.getElementById('stat-nodes').textContent = state.nodes.length;
+            document.getElementById('stat-edges').textContent = state.edges.length;
+
+            if (state.selectedNodeId) {
+                const node = state.nodes.find(n => n.id === state.selectedNodeId);
+                if (!node) return;
+
+                viewEmpty.classList.add('hidden');
+                viewEdge.classList.add('hidden');
+                viewNode.classList.remove('hidden');
+                titleEl.textContent = '楽曲インスペクター';
+
+                document.getElementById('node-title').value = node.title || '';
+                document.getElementById('node-artist').value = node.artist || '';
+                document.getElementById('node-genre').value = node.genre || '';
+                document.getElementById('node-bpm').value = node.bpm || '';
+                document.getElementById('node-key').value = node.key || '';
+                document.getElementById('node-memo').value = node.memo || '';
+
+                const chipsContainer = document.getElementById('genre-quick-chips');
+                chipsContainer.innerHTML = '';
+                QUICK_GENRES.forEach(g => {
+                    const chip = document.createElement('button');
+                    chip.type = 'button';
+                    const isCurrent = (node.genre || '').toLowerCase() === g.toLowerCase();
+                    chip.className = `px-2 py-0.5 rounded text-[10px] border transition ${
+                        isCurrent
+                            ? 'bg-dj-purple/30 text-purple-200 border-dj-purple'
+                            : 'bg-dj-surface/80 text-slate-400 border-dj-border hover:text-white hover:border-slate-500'
+                    }`;
+                    chip.textContent = g;
+                    chip.onclick = () => {
+                        node.genre = g;
+                        document.getElementById('node-genre').value = g;
+                        updateGenreFilterOptions();
+                        updateSearchCountBadge();
+                        updateInspector();
+                        updateSetlistUI();
+                        saveToStorage();
+                        render();
+                    };
+                    chipsContainer.appendChild(chip);
+                });
+
+                const colorsContainer = document.getElementById('node-colors');
+                colorsContainer.innerHTML = '';
+                NODE_COLORS.forEach(c => {
+                    const btn = document.createElement('button');
+                    const active = node.color === c.hex;
+                    btn.className = `w-6 h-6 rounded-full transition transform ${active ? 'scale-110 ring-2 ring-white' : 'opacity-70 hover:opacity-100'}`;
+                    btn.style.backgroundColor = c.hex;
+                    btn.title = c.label;
+                    btn.onclick = () => {
+                        node.color = c.hex;
+                        updateInspector();
+                        saveToStorage();
+                        render();
+                    };
+                    colorsContainer.appendChild(btn);
+                });
+
+                const outEdges = state.edges.filter(e => e.source === node.id);
+                const inEdges = state.edges.filter(e => e.target === node.id);
+
+                document.getElementById('out-count').textContent = outEdges.length;
+                document.getElementById('in-count').textContent = inEdges.length;
+
+                const outList = document.getElementById('node-out-list');
+                outList.innerHTML = outEdges.length ? '' : '<div class="text-[11px] text-slate-500 italic">登録なし</div>';
+                outEdges.forEach(e => {
+                    const target = state.nodes.find(n => n.id === e.target);
+                    if (!target) return;
+                    const item = document.createElement('div');
+                    item.className = 'p-2 rounded-lg bg-dj-surface/70 hover:bg-dj-surface border border-dj-border cursor-pointer flex items-center justify-between gap-2 transition';
+                    const genreSuffix = target.genre ? ` · ${escapeHtml(target.genre)}` : '';
+                    item.innerHTML = `
+                        <div class="min-w-0">
+                            <div class="text-xs font-medium text-white truncate">${escapeHtml(target.title)}</div>
+                            <div class="text-[10px] text-dj-cyan truncate">${escapeHtml(e.label || 'つなぎ')} (${target.bpm || '---'} BPM / ${escapeHtml(target.key || '-')}${genreSuffix})</div>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                    `;
+                    item.onclick = () => selectEdge(e.id);
+                    outList.appendChild(item);
+                });
+
+                const inList = document.getElementById('node-in-list');
+                inList.innerHTML = inEdges.length ? '' : '<div class="text-[11px] text-slate-500 italic">登録なし</div>';
+                inEdges.forEach(e => {
+                    const source = state.nodes.find(n => n.id === e.source);
+                    if (!source) return;
+                    const item = document.createElement('div');
+                    item.className = 'p-2 rounded-lg bg-dj-surface/70 hover:bg-dj-surface border border-dj-border cursor-pointer flex items-center justify-between gap-2 transition';
+                    const genreSuffix = source.genre ? ` · ${escapeHtml(source.genre)}` : '';
+                    item.innerHTML = `
+                        <div class="min-w-0">
+                            <div class="text-xs font-medium text-white truncate">${escapeHtml(source.title)}</div>
+                            <div class="text-[10px] text-dj-purple truncate">${escapeHtml(e.label || 'つなぎ')} (${source.bpm || '---'} BPM / ${escapeHtml(source.key || '-')}${genreSuffix})</div>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                    `;
+                    item.onclick = () => selectEdge(e.id);
+                    inList.appendChild(item);
+                });
+
+                lucide.createIcons();
+            } else if (state.selectedEdgeId) {
+                const edge = state.edges.find(e => e.id === state.selectedEdgeId);
+                if (!edge) return;
+
+                const src = state.nodes.find(n => n.id === edge.source);
+                const tgt = state.nodes.find(n => n.id === edge.target);
+
+                viewEmpty.classList.add('hidden');
+                viewNode.classList.add('hidden');
+                viewEdge.classList.remove('hidden');
+                titleEl.textContent = 'つなぎ・トランジション編集';
+
+                document.getElementById('edge-source-name').textContent = src ? `${src.title} (${src.bpm || '---'} BPM / ${src.key || '-'})` : 'Unknown';
+                document.getElementById('edge-target-name').textContent = tgt ? `${tgt.title} (${tgt.bpm || '---'} BPM / ${tgt.key || '-'})` : 'Unknown';
+
+                if (src && tgt && src.bpm && tgt.bpm) {
+                    const diff = (tgt.bpm - src.bpm).toFixed(1);
+                    const sign = diff > 0 ? '+' : '';
+                    document.getElementById('edge-bpm-diff').textContent = `BPM差: ${sign}${diff}`;
+                } else {
+                    document.getElementById('edge-bpm-diff').textContent = '';
+                }
+
+                document.getElementById('edge-label').value = edge.label || '';
+                document.getElementById('edge-style').value = edge.style || 'solid';
+                document.getElementById('edge-memo').value = edge.memo || '';
+
+                const starsContainer = document.getElementById('edge-rating-stars');
+                starsContainer.innerHTML = '';
+                for (let r = 1; r <= 5; r++) {
+                    const starBtn = document.createElement('button');
+                    starBtn.type = 'button';
+                    const filled = (edge.rating || 0) >= r;
+                    starBtn.className = `p-1 rounded transition ${filled ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'}`;
+                    starBtn.innerHTML = `<i data-lucide="star" class="w-4 h-4 ${filled ? 'fill-amber-400' : ''}"></i>`;
+                    starBtn.onclick = () => {
+                        edge.rating = edge.rating === r ? 0 : r;
+                        updateInspector();
+                        updateTransitionListUI();
+                        saveToStorage();
+                        render();
+                    };
+                    starsContainer.appendChild(starBtn);
+                }
+
+                const edgeColorsContainer = document.getElementById('edge-colors');
+                edgeColorsContainer.innerHTML = '';
+                EDGE_COLORS.forEach(c => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    const active = edge.color === c.hex;
+                    btn.className = `w-5 h-5 rounded-full transition ${active ? 'scale-110 ring-2 ring-white' : 'opacity-70 hover:opacity-100'}`;
+                    btn.style.backgroundColor = c.hex;
+                    btn.onclick = () => {
+                        edge.color = c.hex;
+                        updateInspector();
+                        updateTransitionListUI();
+                        saveToStorage();
+                        render();
+                    };
+                    edgeColorsContainer.appendChild(btn);
+                });
+
+                lucide.createIcons();
+            } else {
+                viewNode.classList.add('hidden');
+                viewEdge.classList.add('hidden');
+                viewEmpty.classList.remove('hidden');
+                titleEl.textContent = 'インスペクター';
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ==========================================
+        // 9. セットリスト（複数セトリ管理・ルート構築 & BPMチャート）
+        // ==========================================
+        function openSetlistNameModal(title, initialValue, onSave) {
+            const modal = document.getElementById('setlist-name-modal');
+            const titleEl = document.getElementById('setlist-modal-title').querySelector('span');
+            const inputEl = document.getElementById('setlist-name-input');
+            const btnOk = document.getElementById('setlist-modal-ok');
+            const btnCancel = document.getElementById('setlist-modal-cancel');
+
+            titleEl.textContent = title;
+            inputEl.value = initialValue || '';
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                inputEl.focus();
+                inputEl.select();
+            }, 30);
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                btnOk.onclick = null;
+                btnCancel.onclick = null;
+                inputEl.onkeydown = null;
+            };
+
+            const submit = () => {
+                const name = inputEl.value.trim();
+                if (!name) {
+                    showToast('セトリ名を入力してください');
+                    return;
+                }
+                cleanup();
+                onSave(name);
+            };
+
+            btnCancel.onclick = cleanup;
+            btnOk.onclick = submit;
+            inputEl.onkeydown = (e) => {
+                if (e.key === 'Enter') submit();
+                else if (e.key === 'Escape') cleanup();
+            };
+        }
+
+        function createNewSetlist(name) {
+            const newSet = {
+                id: generateId('sl'),
+                name,
+                trackIds: []
+            };
+            state.setlists.push(newSet);
+            state.activeSetlistId = newSet.id;
+            syncActiveSetlistArray();
+            saveToStorage();
+            updateSetlistUI();
+            render();
+            showToast(`セトリ「${name}」を作成しました`);
+        }
+
+        function selectSetlist(setlistId) {
+            state.activeSetlistId = setlistId;
+            syncActiveSetlistArray();
+            saveToStorage();
+            updateSetlistUI();
+            render();
+        }
+
+        function appendToSetlist(nodeId) {
+            ensureDefaultSetlist();
+            const active = getActiveSetlist();
+            if (!active) return;
+            if (active.trackIds[active.trackIds.length - 1] === nodeId) return;
+            active.trackIds.push(nodeId);
+            syncActiveSetlistArray();
+            saveToStorage();
+            updateSetlistUI();
+            render();
+        }
+
+        function syncSetlistHighlightButton() {
+            const btn = document.getElementById('btn-toggle-setlist-highlight');
+            if (!btn) return;
+            if (state.setlistHighlight) {
+                btn.classList.add('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
+                btn.classList.remove('bg-dj-surface', 'text-slate-400', 'border-dj-border');
+            } else {
+                btn.classList.remove('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
+                btn.classList.add('bg-dj-surface', 'text-slate-400', 'border-dj-border');
+            }
+        }
+
+        function updateSetlistUI() {
+            ensureDefaultSetlist();
+            const selector = document.getElementById('setlist-selector');
+            const listContainer = document.getElementById('setlist-items');
+            const countBadge = document.getElementById('setlist-count');
+            const chartContainer = document.getElementById('bpm-chart-container');
+
+            if (selector) {
+                selector.innerHTML = '';
+                state.setlists.forEach(sl => {
+                    const opt = document.createElement('option');
+                    opt.value = sl.id;
+                    opt.textContent = `${sl.name} (${sl.trackIds.length}曲)`;
+                    if (sl.id === state.activeSetlistId) opt.selected = true;
+                    selector.appendChild(opt);
+                });
+            }
+
+            syncSetlistHighlightButton();
+
+            const validTracks = state.setlist
+                .map(id => state.nodes.find(n => n.id === id))
+                .filter(Boolean);
+
+            countBadge.textContent = `${validTracks.length}曲`;
+            listContainer.innerHTML = '';
+
+            if (validTracks.length === 0) {
+                chartContainer.innerHTML = '<span class="text-[10px] text-slate-500">キャンバスの曲をクリックしてこのセトリに追加...</span>';
+                return;
+            }
+
+            const bpms = validTracks.map(t => Number(t.bpm) || 128);
+            const minBpm = Math.min(...bpms) - 4;
+            const maxBpm = Math.max(...bpms) + 4;
+            const range = Math.max(maxBpm - minBpm, 10);
+
+            const svgW = 280;
+            const svgH = 28;
+            const points = bpms.map((b, idx) => {
+                const px = validTracks.length === 1 ? svgW / 2 : (idx / (validTracks.length - 1)) * (svgW - 16) + 8;
+                const py = svgH - 4 - ((b - minBpm) / range) * (svgH - 8);
+                return `${px.toFixed(1)},${py.toFixed(1)}`;
+            }).join(' ');
+
+            chartContainer.innerHTML = `
+                <div class="flex flex-col justify-center shrink-0 pr-2">
+                    <span class="text-[9px] text-slate-400 uppercase">BPM推移</span>
+                    <span class="text-[11px] font-mono text-dj-cyan font-bold">${Math.min(...bpms)} → ${Math.max(...bpms)}</span>
+                </div>
+                <svg viewBox="0 0 ${svgW} ${svgH}" class="flex-1 h-7 overflow-visible">
+                    <polyline fill="none" stroke="#10b981" stroke-width="2" points="${points}" />
+                    ${bpms.map((b, idx) => {
+                        const px = validTracks.length === 1 ? svgW / 2 : (idx / (validTracks.length - 1)) * (svgW - 16) + 8;
+                        const py = svgH - 4 - ((b - minBpm) / range) * (svgH - 8);
+                        return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.8" fill="#ffffff" />`;
+                    }).join('')}
+                </svg>
+            `;
+
+            validTracks.forEach((t, idx) => {
+                let transitionBadge = '';
+                if (idx > 0) {
+                    const prev = validTracks[idx - 1];
+                    const edge = state.edges.find(e => e.source === prev.id && e.target === t.id);
+                    if (edge) {
+                        transitionBadge = `<span class="text-[10px] px-1.5 py-0.2 rounded bg-dj-cyan/15 text-dj-cyan truncate max-w-[110px]">↳ ${escapeHtml(edge.label || 'つなぎ')}</span>`;
+                    } else {
+                        transitionBadge = `<span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300">未登録ルート</span>`;
+                    }
+                }
+
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between bg-dj-surface/70 hover:bg-dj-surface px-2.5 py-1.5 rounded-lg border border-dj-border/60 text-xs cursor-pointer transition';
+                const genrePill = t.genre
+                    ? `<span class="text-[10px] px-1.5 py-0.2 rounded-full bg-dj-purple/20 text-purple-200 border border-dj-purple/40 shrink-0">${escapeHtml(t.genre)}</span>`
+                    : '';
+                row.innerHTML = `
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <span class="font-mono text-[11px] font-bold text-dj-emerald w-5 shrink-0">#${idx + 1}</span>
+                        <span class="truncate text-white font-medium">${escapeHtml(t.title)}</span>
+                        ${genrePill}
+                        ${transitionBadge}
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 ml-1">
+                        <span class="font-mono text-[10px] text-slate-400">${t.bpm || '---'} / ${escapeHtml(t.key || '-')}</span>
+                        <button data-idx="${idx}" class="btn-remove-setlist text-slate-500 hover:text-red-400 p-0.5" title="リストから外す">
+                            <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                `;
+                row.onclick = () => {
+                    state.camera.x = -t.x * state.camera.zoom;
+                    state.camera.y = -t.y * state.camera.zoom;
+                    render();
+                };
+                listContainer.appendChild(row);
+            });
+
+            listContainer.querySelectorAll('.btn-remove-setlist').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const idx = Number(btn.dataset.idx);
+                    const active = getActiveSetlist();
+                    if (active) {
+                        active.trackIds.splice(idx, 1);
+                        syncActiveSetlistArray();
+                    }
+                    saveToStorage();
+                    updateSetlistUI();
+                    render();
+                };
+            });
+
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // 10. マウス & タッチ インタラクションハンドラ
+        // ==========================================
+        function getPointerPos(e) {
+            const rect = container.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                sx: clientX - rect.left,
+                sy: clientY - rect.top
+            };
+        }
+
+        function handlePointerDown(e) {
+            if (e.button !== undefined && e.button !== 0 && e.button !== 1) return;
+            const { sx, sy } = getPointerPos(e);
+            const world = screenToWorld(sx, sy);
+            state.pointerScreen = { x: sx, y: sy };
+            state.pointerWorld = world;
+            state.hasMovedDuringDrag = false;
+
+            const hitNode = getNodeAt(world.x, world.y);
+
+            if ((e.shiftKey || state.connectMode) && hitNode) {
+                if (state.connectMode && state.connectSourceId && state.connectSourceId !== hitNode.id) {
+                    addEdge(state.connectSourceId, hitNode.id);
+                    state.connectSourceId = null;
+                    render();
+                    return;
+                }
+                state.isDrawingEdge = true;
+                state.drawEdgeSourceId = hitNode.id;
+                state.connectSourceId = hitNode.id;
+                render();
+                return;
+            }
+
+            if (hitNode) {
+                state.isDraggingNode = true;
+                state.dragNodeId = hitNode.id;
+                state.dragOffset = {
+                    x: world.x - hitNode.x,
+                    y: world.y - hitNode.y
+                };
+                const idx = state.nodes.findIndex(n => n.id === hitNode.id);
+                if (idx !== -1) {
+                    const [moved] = state.nodes.splice(idx, 1);
+                    state.nodes.push(moved);
+                }
+                render();
+                return;
+            }
+
+            const hitEdge = getEdgeAt(world.x, world.y);
+            if (hitEdge) {
+                selectEdge(hitEdge.id);
+                return;
+            }
+
+            state.isPanning = true;
+            state.panStart = {
+                x: sx - state.camera.x,
+                y: sy - state.camera.y
+            };
+        }
+
+        function handlePointerMove(e) {
+            const { sx, sy } = getPointerPos(e);
+            const world = screenToWorld(sx, sy);
+
+            if (Math.hypot(sx - state.pointerScreen.x, sy - state.pointerScreen.y) > 3) {
+                state.hasMovedDuringDrag = true;
+            }
+            state.pointerScreen = { x: sx, y: sy };
+            state.pointerWorld = world;
+
+            if (state.isDrawingEdge) {
+                const hoverN = getNodeAt(world.x, world.y);
+                state.hoveredNodeId = hoverN ? hoverN.id : null;
+                render();
+                return;
+            }
+
+            if (state.isDraggingNode && state.dragNodeId) {
+                const node = state.nodes.find(n => n.id === state.dragNodeId);
+                if (node) {
+                    node.x = Math.round(world.x - state.dragOffset.x);
+                    node.y = Math.round(world.y - state.dragOffset.y);
+                    render();
+                }
+                return;
+            }
+
+            if (state.isPanning) {
+                state.camera.x = sx - state.panStart.x;
+                state.camera.y = sy - state.panStart.y;
+                render();
+                return;
+            }
+
+            const hoverNode = getNodeAt(world.x, world.y);
+            const hoverEdge = hoverNode ? null : getEdgeAt(world.x, world.y);
+            const nextHoverNodeId = hoverNode ? hoverNode.id : null;
+            const nextHoverEdgeId = hoverEdge ? hoverEdge.id : null;
+
+            if (state.hoveredNodeId !== nextHoverNodeId || state.hoveredEdgeId !== nextHoverEdgeId) {
+                state.hoveredNodeId = nextHoverNodeId;
+                state.hoveredEdgeId = nextHoverEdgeId;
+                canvas.style.cursor = (hoverNode || hoverEdge) ? 'pointer' : (state.connectMode ? 'crosshair' : 'grab');
+                render();
+            }
+        }
+
+        function handlePointerUp(e) {
+            if (state.isDrawingEdge) {
+                const targetNode = getNodeAt(state.pointerWorld.x, state.pointerWorld.y);
+                if (targetNode && targetNode.id !== state.drawEdgeSourceId) {
+                    addEdge(state.drawEdgeSourceId, targetNode.id);
+                    state.connectSourceId = null;
+                }
+                state.isDrawingEdge = false;
+                state.drawEdgeSourceId = null;
+                render();
+                return;
+            }
+
+            if (state.isDraggingNode) {
+                if (state.hasMovedDuringDrag) {
+                    saveToStorage();
+                } else if (state.dragNodeId) {
+                    selectNode(state.dragNodeId);
+                }
+                state.isDraggingNode = false;
+                state.dragNodeId = null;
+                render();
+                return;
+            }
+
+            if (state.isPanning) {
+                if (!state.hasMovedDuringDrag) {
+                    clearSelection();
+                    if (state.connectMode) {
+                        state.connectSourceId = null;
+                    }
+                }
+                state.isPanning = false;
+                render();
+            }
+        }
+
+        canvas.addEventListener('dblclick', (e) => {
+            const { sx, sy } = getPointerPos(e);
+            const world = screenToWorld(sx, sy);
+            const hitNode = getNodeAt(world.x, world.y);
+            const hitEdge = getEdgeAt(world.x, world.y);
+            if (!hitNode && !hitEdge) {
+                addNode(world.x, world.y);
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const { sx, sy } = getPointerPos(e);
+            const beforeWorld = screenToWorld(sx, sy);
+
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            const nextZoom = Math.min(Math.max(state.camera.zoom * zoomFactor, 0.25), 2.5);
+            state.camera.zoom = nextZoom;
+
+            const afterScreen = worldToScreen(beforeWorld.x, beforeWorld.y);
+            state.camera.x += sx - afterScreen.x;
+            state.camera.y += sy - afterScreen.y;
+
+            updateZoomLabel();
+            render();
+        }, { passive: false });
+
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        let lastPinchDist = null;
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                lastPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            } else if (e.touches.length === 1) {
+                handlePointerDown(e);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 2 && lastPinchDist !== null) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const scale = dist / lastPinchDist;
+                state.camera.zoom = Math.min(Math.max(state.camera.zoom * scale, 0.25), 2.5);
+                lastPinchDist = dist;
+                updateZoomLabel();
+                render();
+            } else if (e.touches.length === 1) {
+                handlePointerMove(e);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) lastPinchDist = null;
+            handlePointerUp(e);
+        });
+
+        // ==========================================
+        // 11. UIコントロール・フォームイベントバインド
+        // ==========================================
+        document.getElementById('btn-add-node').onclick = () => {
+            const jitterX = (Math.random() - 0.5) * 80;
+            const jitterY = (Math.random() - 0.5) * 80;
+            const center = screenToWorld(container.clientWidth / 2 + jitterX, container.clientHeight / 2 + jitterY);
+            addNode(center.x, center.y);
+        };
+
+        function setConnectMode(enabled) {
+            state.connectMode = enabled;
+            state.connectSourceId = null;
+            const btn = document.getElementById('btn-connect-mode');
+            const banner = document.getElementById('mode-banner');
+            if (enabled) {
+                btn.classList.add('bg-dj-pink/20', 'text-dj-pink', 'border-dj-pink/40');
+                btn.classList.remove('text-slate-300', 'border-transparent');
+                banner.classList.remove('hidden');
+            } else {
+                btn.classList.remove('bg-dj-pink/20', 'text-dj-pink', 'border-dj-pink/40');
+                btn.classList.add('text-slate-300', 'border-transparent');
+                banner.classList.add('hidden');
+            }
+            render();
+        }
+
+        document.getElementById('btn-connect-mode').onclick = () => setConnectMode(!state.connectMode);
+        document.getElementById('btn-cancel-mode').onclick = () => setConnectMode(false);
+
+        document.getElementById('btn-focus-mode').onclick = () => {
+            state.focusMode = !state.focusMode;
+            const btn = document.getElementById('btn-focus-mode');
+            if (state.focusMode) {
+                btn.classList.add('bg-dj-purple/20', 'text-dj-purple', 'border-dj-purple/40');
+                btn.classList.remove('text-slate-300', 'border-transparent');
+                showToast('フォーカスモード ON（関連ルートを強調）');
+            } else {
+                btn.classList.remove('bg-dj-purple/20', 'text-dj-purple', 'border-dj-purple/40');
+                btn.classList.add('text-slate-300', 'border-transparent');
+                showToast('フォーカスモード OFF（全体表示）');
+            }
+            render();
+        };
+
+        document.getElementById('btn-setlist-mode').onclick = () => {
+            state.setlistMode = !state.setlistMode;
+            const btn = document.getElementById('btn-setlist-mode');
+            const drawer = document.getElementById('setlist-drawer');
+            if (state.setlistMode) {
+                btn.classList.add('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
+                btn.classList.remove('text-slate-300', 'border-transparent');
+                drawer.classList.remove('hidden');
+                ensureDefaultSetlist();
+                updateSetlistUI();
+            } else {
+                btn.classList.remove('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
+                btn.classList.add('text-slate-300', 'border-transparent');
+                drawer.classList.add('hidden');
+            }
+            render();
+        };
+
+        document.getElementById('setlist-selector').addEventListener('change', (e) => {
+            selectSetlist(e.target.value);
+        });
+
+        document.getElementById('btn-new-setlist').onclick = () => {
+            const defaultName = `セトリ #${state.setlists.length + 1}`;
+            openSetlistNameModal('新しいセトリを作成', defaultName, (name) => {
+                createNewSetlist(name);
+            });
+        };
+
+        document.getElementById('btn-rename-setlist').onclick = () => {
+            const active = getActiveSetlist();
+            if (!active) return;
+            openSetlistNameModal('セトリ名の変更', active.name, (name) => {
+                active.name = name;
+                saveToStorage();
+                updateSetlistUI();
+                showToast('セトリ名を変更しました');
+            });
+        };
+
+        document.getElementById('btn-toggle-setlist-highlight').onclick = () => {
+            state.setlistHighlight = !state.setlistHighlight;
+            syncSetlistHighlightButton();
+            render();
+            showToast(state.setlistHighlight ? 'セトリ強調表示 ON' : 'セトリ強調表示 OFF');
+        };
+
+        document.getElementById('btn-clear-setlist').onclick = () => {
+            const active = getActiveSetlist();
+            if (!active || active.trackIds.length === 0) return;
+            active.trackIds = [];
+            syncActiveSetlistArray();
+            saveToStorage();
+            updateSetlistUI();
+            render();
+            showToast('セトリの曲リストをクリアしました');
+        };
+
+        document.getElementById('btn-delete-setlist').onclick = () => {
+            const active = getActiveSetlist();
+            if (!active) return;
+            showConfirm('セトリの削除', `セトリ「${active.name}」を削除しますか？`, () => {
+                state.setlists = state.setlists.filter(s => s.id !== active.id);
+                state.activeSetlistId = state.setlists.length > 0 ? state.setlists[0].id : null;
+                ensureDefaultSetlist();
+                saveToStorage();
+                updateSetlistUI();
+                render();
+                showToast('セトリを削除しました');
+            });
+        };
+
+        document.getElementById('btn-copy-setlist').onclick = () => {
+            if (state.setlist.length === 0) return;
+            const active = getActiveSetlist();
+            const header = active ? `【${active.name}】\n` : '';
+            const lines = state.setlist.map((id, idx) => {
+                const n = state.nodes.find(item => item.id === id);
+                if (!n) return '';
+                const genrePart = n.genre ? ` | ${n.genre}` : '';
+                let line = `${idx + 1}. ${n.title}${n.artist ? ' - ' + n.artist : ''} [${n.bpm || '---'} BPM / ${n.key || '-'}${genrePart}]`;
+                if (idx > 0) {
+                    const prevId = state.setlist[idx - 1];
+                    const edge = state.edges.find(e => e.source === prevId && e.target === id);
+                    if (edge && edge.label) {
+                        line = `   ↳ (${edge.label})\n` + line;
+                    }
+                }
+                return line;
+            });
+            const text = header + lines.join('\n');
+
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('セットリストをクリップボードにコピーしました');
+            } catch (err) {
+                showToast('コピーに失敗しました');
+            }
+            textarea.remove();
+        };
+
+        document.getElementById('btn-zoom-in').onclick = () => {
+            state.camera.zoom = Math.min(state.camera.zoom * 1.2, 2.5);
+            updateZoomLabel();
+            render();
+        };
+        document.getElementById('btn-zoom-out').onclick = () => {
+            state.camera.zoom = Math.max(state.camera.zoom / 1.2, 0.25);
+            updateZoomLabel();
+            render();
+        };
+        document.getElementById('btn-reset-view').onclick = fitGraphToScreen;
+
+        // ノードフォームのリアルタイム更新
+        ['node-title', 'node-artist', 'node-genre', 'node-bpm', 'node-key', 'node-memo'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                const node = state.nodes.find(n => n.id === state.selectedNodeId);
+                if (!node) return;
+                const field = id.replace('node-', '');
+                node[field] = field === 'bpm' ? (parseFloat(e.target.value) || '') : e.target.value;
+                if (field === 'genre') {
+                    updateGenreFilterOptions();
+                    updateSetlistUI();
+                }
+                updateSearchCountBadge();
+                updateTransitionListUI();
+                saveToStorage();
+                render();
+            });
+        });
+
+        document.getElementById('btn-delete-node').onclick = () => {
+            if (!state.selectedNodeId) return;
+            deleteNode(state.selectedNodeId);
+        };
+
+        // エッジフォームのリアルタイム更新
+        document.getElementById('edge-label').addEventListener('input', (e) => {
+            const edge = state.edges.find(item => item.id === state.selectedEdgeId);
+            if (!edge) return;
+            edge.label = e.target.value;
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+        });
+
+        document.getElementById('edge-style').addEventListener('change', (e) => {
+            const edge = state.edges.find(item => item.id === state.selectedEdgeId);
+            if (!edge) return;
+            edge.style = e.target.value;
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+        });
+
+        document.getElementById('edge-memo').addEventListener('input', (e) => {
+            const edge = state.edges.find(item => item.id === state.selectedEdgeId);
+            if (!edge) return;
+            edge.memo = e.target.value;
+            updateTransitionListUI();
+            saveToStorage();
+            render();
+        });
+
+        document.querySelectorAll('.preset-tag').forEach(btn => {
+            btn.onclick = () => {
+                const edge = state.edges.find(item => item.id === state.selectedEdgeId);
+                if (!edge) return;
+                edge.label = btn.textContent;
+                document.getElementById('edge-label').value = btn.textContent;
+                updateTransitionListUI();
+                saveToStorage();
+                render();
+            };
+        });
+
+        document.getElementById('btn-reverse-edge').onclick = () => {
+            if (state.selectedEdgeId) reverseEdge(state.selectedEdgeId);
+        };
+
+        document.getElementById('btn-delete-edge').onclick = () => {
+            if (state.selectedEdgeId) deleteEdge(state.selectedEdgeId);
+        };
+
+        // ジャンルフィルター連動
+        function updateGenreFilterOptions() {
+            const genres = Array.from(
+                new Set(
+                    state.nodes
+                        .map(n => (n.genre || '').trim())
+                        .filter(g => g.length > 0)
+                )
+            ).sort((a, b) => a.localeCompare(b));
+
+            if (state.selectedGenreFilter && !genres.includes(state.selectedGenreFilter)) {
+                state.selectedGenreFilter = '';
+            }
+
+            ['genre-filter', 'genre-filter-mobile'].forEach((selectId, idx) => {
+                const sel = document.getElementById(selectId);
+                if (!sel) return;
+                const defaultLabel = idx === 0 ? '全ジャンル (All)' : '全ジャンル';
+                sel.innerHTML = `<option value="">${defaultLabel}</option>`;
+                genres.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g;
+                    opt.textContent = g;
+                    if (g === state.selectedGenreFilter) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            });
+        }
+
+        function handleGenreFilterChange(val) {
+            state.selectedGenreFilter = val;
+            const desktopSel = document.getElementById('genre-filter');
+            const mobileSel = document.getElementById('genre-filter-mobile');
+            if (desktopSel) desktopSel.value = val;
+            if (mobileSel) mobileSel.value = val;
+            updateSearchCountBadge();
+            render();
+        }
+
+        document.getElementById('genre-filter').addEventListener('change', e => handleGenreFilterChange(e.target.value));
+        document.getElementById('genre-filter-mobile').addEventListener('change', e => handleGenreFilterChange(e.target.value));
+
+        // 検索バー連動
+        function handleSearchInput(val) {
+            state.searchQuery = val;
+            const inputEl = document.getElementById('search-input');
+            if (inputEl && inputEl.value !== val) inputEl.value = val;
+            const clearBtn = document.getElementById('btn-clear-search');
+            if (val) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+            updateSearchCountBadge();
+            render();
+        }
+        document.getElementById('search-input').addEventListener('input', e => handleSearchInput(e.target.value));
+        document.getElementById('btn-clear-search').onclick = () => handleSearchInput('');
+
+        // ==========================================
+        // 12. 自動整列レイアウト & データ管理メニュー
+        // ==========================================
+        const layoutMenuWrapper = document.getElementById('layout-menu-wrapper');
+        const layoutMenuBtn = document.getElementById('btn-layout-menu');
+        const layoutDropdown = document.getElementById('layout-dropdown');
+
+        layoutMenuBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dataDropdown.classList.add('hidden');
+            layoutDropdown.classList.toggle('hidden');
+        });
+
+        let layoutAnimFrame = null;
+        function animateNodesToPositions(targetMap, label) {
+            if (state.nodes.length === 0) {
+                showToast('整列する楽曲がありません');
+                return;
+            }
+            if (layoutAnimFrame) cancelAnimationFrame(layoutAnimFrame);
+
+            const startPositions = new Map();
+            state.nodes.forEach(n => {
+                startPositions.set(n.id, { x: n.x, y: n.y });
+            });
+
+            const duration = 420;
+            const startTime = performance.now();
+
+            function step(now) {
+                const elapsed = now - startTime;
+                const t = Math.min(elapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - t, 3);
+
+                state.nodes.forEach(n => {
+                    const start = startPositions.get(n.id);
+                    const target = targetMap.get(n.id);
+                    if (start && target) {
+                        n.x = Math.round(start.x + (target.x - start.x) * ease);
+                        n.y = Math.round(start.y + (target.y - start.y) * ease);
+                    }
+                });
+
+                render();
+
+                if (t < 1) {
+                    layoutAnimFrame = requestAnimationFrame(step);
+                } else {
+                    layoutAnimFrame = null;
+                    saveToStorage();
+                    fitGraphToScreen();
+                    showToast(`${label}で整列しました`);
+                }
+            }
+
+            layoutAnimFrame = requestAnimationFrame(step);
+        }
+
+        function applyBpmLayout() {
+            const withBpm = state.nodes.filter(n => n.bpm !== '' && !isNaN(Number(n.bpm)));
+            const withoutBpm = state.nodes.filter(n => n.bpm === '' || isNaN(Number(n.bpm)));
+
+            withBpm.sort((a, b) => Number(a.bpm) - Number(b.bpm) || a.title.localeCompare(b.title));
+
+            const columns = [];
+            withBpm.forEach(node => {
+                const bpmVal = Number(node.bpm);
+                const lastCol = columns[columns.length - 1];
+                if (lastCol && Math.abs(bpmVal - lastCol.baseBpm) <= 2.5) {
+                    lastCol.nodes.push(node);
+                } else {
+                    columns.push({ baseBpm: bpmVal, nodes: [node] });
+                }
+            });
+
+            if (withoutBpm.length > 0) {
+                columns.push({ baseBpm: Infinity, nodes: withoutBpm });
+            }
+
+            const colSpacing = 265;
+            const rowSpacing = 112;
+            const totalW = (columns.length - 1) * colSpacing;
+            const targetMap = new Map();
+
+            columns.forEach((col, cIdx) => {
+                const x = -totalW / 2 + cIdx * colSpacing;
+                const colH = (col.nodes.length - 1) * rowSpacing;
+                col.nodes.forEach((node, rIdx) => {
+                    const y = -colH / 2 + rIdx * rowSpacing;
+                    targetMap.set(node.id, { x, y });
+                });
+            });
+
+            animateNodesToPositions(targetMap, 'BPM順（左→右）');
+        }
+
+        function applyGenreClusterLayout() {
+            const groups = new Map();
+            state.nodes.forEach(node => {
+                const g = (node.genre || '').trim() || '未分類 (No Genre)';
+                if (!groups.has(g)) groups.set(g, []);
+                groups.get(g).push(node);
+            });
+
+            const sortedGroups = Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length);
+            const clusterCols = Math.max(1, Math.ceil(Math.sqrt(sortedGroups.length)));
+
+            const clusters = sortedGroups.map(([genreName, nodes]) => {
+                nodes.sort((a, b) => (Number(a.bpm) || 999) - (Number(b.bpm) || 999));
+                const innerCols = nodes.length <= 2 ? 1 : 2;
+                const innerRows = Math.ceil(nodes.length / innerCols);
+                const w = innerCols * 235;
+                const h = innerRows * 105;
+                return { genreName, nodes, innerCols, w, h };
+            });
+
+            const numRows = Math.ceil(clusters.length / clusterCols);
+            const colWidths = new Array(clusterCols).fill(0);
+            const rowHeights = new Array(numRows).fill(0);
+
+            clusters.forEach((cl, idx) => {
+                const r = Math.floor(idx / clusterCols);
+                const c = idx % clusterCols;
+                colWidths[c] = Math.max(colWidths[c], cl.w);
+                rowHeights[r] = Math.max(rowHeights[r], cl.h);
+            });
+
+            const clusterGapX = 120;
+            const clusterGapY = 110;
+            const totalGridW = colWidths.reduce((s, w) => s + w, 0) + (clusterCols - 1) * clusterGapX;
+            const totalGridH = rowHeights.reduce((s, h) => s + h, 0) + (numRows - 1) * clusterGapY;
+
+            const colOffsets = [];
+            let accX = -totalGridW / 2;
+            for (let c = 0; c < clusterCols; c++) {
+                colOffsets.push(accX + colWidths[c] / 2);
+                accX += colWidths[c] + clusterGapX;
+            }
+
+            const rowOffsets = [];
+            let accY = -totalGridH / 2;
+            for (let r = 0; r < numRows; r++) {
+                rowOffsets.push(accY + rowHeights[r] / 2);
+                accY += rowHeights[r] + clusterGapY;
+            }
+
+            const targetMap = new Map();
+            clusters.forEach((cl, idx) => {
+                const r = Math.floor(idx / clusterCols);
+                const c = idx % clusterCols;
+                const centerX = colOffsets[c];
+                const centerY = rowOffsets[r];
+
+                const innerRows = Math.ceil(cl.nodes.length / cl.innerCols);
+                const innerW = (cl.innerCols - 1) * 235;
+                const innerH = (innerRows - 1) * 105;
+
+                cl.nodes.forEach((node, nIdx) => {
+                    const ic = nIdx % cl.innerCols;
+                    const ir = Math.floor(nIdx / cl.innerCols);
+                    const x = centerX - innerW / 2 + ic * 235;
+                    const y = centerY - innerH / 2 + ir * 105;
+                    targetMap.set(node.id, { x, y });
+                });
+            });
+
+            animateNodesToPositions(targetMap, 'ジャンル別クラスター');
+        }
+
+        /**
+         * 3. 力学モデル（フォースレイアウト）
+         * 一直線のつなぎは角度を継承して内側から外側へまっすぐ放射線状に配置
+         */
+        function applyForceLayout() {
+            const count = state.nodes.length;
+            if (count === 0) return;
+
+            const inDeg = new Map(state.nodes.map(n => [n.id, 0]));
+            const outDeg = new Map(state.nodes.map(n => [n.id, 0]));
+            const outAdj = new Map(state.nodes.map(n => [n.id, []]));
+
+            state.edges.forEach(e => {
+                if (inDeg.has(e.target) && outDeg.has(e.source) && e.source !== e.target) {
+                    inDeg.set(e.target, inDeg.get(e.target) + 1);
+                    outDeg.set(e.source, outDeg.get(e.source) + 1);
+                    outAdj.get(e.source).push(e.target);
+                }
+            });
+
+            // 起点（ルート）の抽出
+            const roots = state.nodes.filter(n => inDeg.get(n.id) === 0 && outDeg.get(n.id) > 0);
+            if (roots.length === 0) {
+                const connected = state.nodes
+                    .filter(n => (inDeg.get(n.id) + outDeg.get(n.id)) > 0)
+                    .sort((a, b) => (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id)));
+                if (connected.length > 0) roots.push(connected[0]);
+            }
+
+            // BFSツリー構築と親の角度継承（一本道は角度をそのまま引き継いで一直線にする）
+            const depthMap = new Map();
+            const angleMap = new Map();
+            const queue = [];
+
+            roots.forEach((r, idx) => {
+                depthMap.set(r.id, 0);
+                const rootAngle = (2 * Math.PI * idx) / Math.max(roots.length, 1) - Math.PI / 2;
+                angleMap.set(r.id, rootAngle);
+                queue.push(r.id);
+            });
+
+            while (queue.length > 0) {
+                const currId = queue.shift();
+                const d = depthMap.get(currId);
+                const baseAngle = angleMap.get(currId);
+
+                const unvisitedChildren = outAdj.get(currId).filter(nxt => !depthMap.has(nxt));
+                const childCount = unvisitedChildren.length;
+                // 子が1つだけなら角度差0で真っ直ぐ継承、複数分岐なら扇状に展開
+                const spread = childCount <= 1 ? 0 : Math.min(Math.PI * 0.65, (childCount - 1) * 0.42);
+
+                unvisitedChildren.forEach((nxtId, idx) => {
+                    depthMap.set(nxtId, d + 1);
+                    const offset = childCount <= 1 ? 0 : -spread / 2 + (spread * idx) / (childCount - 1);
+                    angleMap.set(nxtId, baseAngle + offset);
+                    queue.push(nxtId);
+                });
+            }
+
+            // 未到達ノード（循環や孤立ノード）への角度割り当て
+            const unvisitedNodes = state.nodes.filter(n => !depthMap.has(n.id));
+            unvisitedNodes.forEach((n, idx) => {
+                const isIsolated = inDeg.get(n.id) === 0 && outDeg.get(n.id) === 0;
+                depthMap.set(n.id, isIsolated ? 2 : 1);
+                angleMap.set(n.id, (2 * Math.PI * idx) / Math.max(unvisitedNodes.length, 1) + Math.PI / 4);
+            });
+
+            // 同じ深度（リング）にあるノード同士が角度的に近すぎる場合に均等分散させて毛玉化を防止
+            const depthBuckets = new Map();
+            state.nodes.forEach(n => {
+                const d = depthMap.get(n.id) || 0;
+                if (!depthBuckets.has(d)) depthBuckets.set(d, []);
+                depthBuckets.get(d).push(n.id);
+            });
+
+            depthBuckets.forEach((ids, d) => {
+                if (d === 0 && ids.length <= 1) return;
+                ids.sort((a, b) => (angleMap.get(a) || 0) - (angleMap.get(b) || 0));
+                const nLen = ids.length;
+                const minAngularGap = (2 * Math.PI) / Math.max(nLen, 4);
+                for (let k = 0; k < nLen; k++) {
+                    const currAngle = angleMap.get(ids[k]);
+                    const nextIdx = (k + 1) % nLen;
+                    let nextAngle = angleMap.get(ids[nextIdx]);
+                    if (nextIdx === 0) nextAngle += 2 * Math.PI;
+                    if (nextAngle - currAngle < minAngularGap * 0.75) {
+                        const targetNext = currAngle + minAngularGap * 0.75;
+                        angleMap.set(ids[nextIdx], targetNext % (2 * Math.PI));
+                    }
+                }
+            });
+
+            const maxDepth = Math.max(1, ...Array.from(depthMap.values()));
+            const stepRadius = 310; // カード横幅(204px)が重ならない十分な放射距離
+
+            const simNodes = state.nodes.map(n => {
+                const inc = inDeg.get(n.id);
+                const out = outDeg.get(n.id);
+                const isIsolated = inc === 0 && out === 0;
+                const d = depthMap.get(n.id) || 0;
+                const targetAngle = angleMap.get(n.id) || 0;
+
+                // 同じリング内のノード数に応じて半径も自動拡張し円周上のスペースを確保
+                const ringCount = (depthBuckets.get(d) || []).length;
+                const minRingRadius = ringCount > 1 ? (ringCount * 240) / (2 * Math.PI) : 0;
+
+                let targetR = Math.max(d * stepRadius, minRingRadius);
+                if (roots.length === 1 && d === 0) {
+                    targetR = 0;
+                } else if (roots.length > 1 && d === 0) {
+                    targetR = Math.max(180, minRingRadius);
+                }
+                if (isIsolated) {
+                    const isoCount = state.nodes.filter(item => inDeg.get(item.id) === 0 && outDeg.get(item.id) === 0).length;
+                    const isoMinR = (isoCount * 240) / (2 * Math.PI);
+                    targetR = Math.max((maxDepth + 0.8) * stepRadius, isoMinR, 480);
+                }
+
+                return {
+                    id: n.id,
+                    x: Math.cos(targetAngle) * targetR,
+                    y: Math.sin(targetAngle) * targetR * 0.82,
+                    vx: 0,
+                    vy: 0,
+                    targetR,
+                    targetAngle,
+                    isRoot: d === 0,
+                    isIsolated
+                };
+            });
+
+            const iterations = 160;
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const cooling = 1 - iter / iterations;
+
+                // 1. 割り当てられた放射線（角度＋半径）への復元力（一直線を維持）
+                simNodes.forEach(s => {
+                    const idealX = Math.cos(s.targetAngle) * s.targetR;
+                    const idealY = Math.sin(s.targetAngle) * s.targetR * 0.82;
+                    const pullStrength = s.isRoot ? 0.14 : 0.10;
+
+                    s.vx = (s.vx + (idealX - s.x) * pullStrength * cooling) * 0.72;
+                    s.vy = (s.vy + (idealY - s.y) * pullStrength * cooling) * 0.72;
+                    s.x += s.vx;
+                    s.y += s.vy;
+                });
+
+                // 2. カード矩形サイズ（204x72 + 余白）に基づく確実な重なり解消パス
+                const boxW = NODE_WIDTH + 36;
+                const boxH = NODE_HEIGHT + 32;
+                for (let i = 0; i < count; i++) {
+                    for (let j = i + 1; j < count; j++) {
+                        const a = simNodes[i];
+                        const b = simNodes[j];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const overlapX = boxW - Math.abs(dx);
+                        const overlapY = boxH - Math.abs(dy);
+
+                        if (overlapX > 0 && overlapY > 0) {
+                            // 重なりが浅い軸方向へ押し出して確実に分離する
+                            if (overlapX < overlapY) {
+                                const push = (overlapX / 2) * 0.85;
+                                const sign = dx >= 0 ? 1 : -1;
+                                a.x -= sign * push;
+                                b.x += sign * push;
+                            } else {
+                                const push = (overlapY / 2) * 0.85;
+                                const sign = dy >= 0 ? 1 : -1;
+                                a.y -= sign * push;
+                                b.y += sign * push;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 最終仕上げ：万が一残っている矩形重なりを完全に解消
+            const finalBoxW = NODE_WIDTH + 28;
+            const finalBoxH = NODE_HEIGHT + 24;
+            for (let pass = 0; pass < 25; pass++) {
+                let moved = false;
+                for (let i = 0; i < count; i++) {
+                    for (let j = i + 1; j < count; j++) {
+                        const a = simNodes[i];
+                        const b = simNodes[j];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const overlapX = finalBoxW - Math.abs(dx);
+                        const overlapY = finalBoxH - Math.abs(dy);
+                        if (overlapX > 0 && overlapY > 0) {
+                            moved = true;
+                            if (overlapX < overlapY) {
+                                const shift = overlapX / 2 + 1;
+                                const sign = dx >= 0 ? 1 : -1;
+                                a.x -= sign * shift;
+                                b.x += sign * shift;
+                            } else {
+                                const shift = overlapY / 2 + 1;
+                                const sign = dy >= 0 ? 1 : -1;
+                                a.y -= sign * shift;
+                                b.y += sign * shift;
+                            }
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+
+            const targetMap = new Map();
+            simNodes.forEach(s => {
+                targetMap.set(s.id, {
+                    x: Math.round(s.x),
+                    y: Math.round(s.y)
+                });
+            });
+
+            animateNodesToPositions(targetMap, '力学整列（放射線・重なり解消）');
+        }
+
+        /**
+         * 4. 重力整列（物理ベースの重力＋バネ力学シミュレーション）
+         * 起点（ルート）を上部に吊るし、全ノードに下向き重力(+Y)とエッジのバネ張力・反発力を与えて有機的に垂れ下がる配置を計算
+         */
+        function applyGravityLayout() {
+            const count = state.nodes.length;
+            if (count === 0) return;
+
+            const inDeg = new Map(state.nodes.map(n => [n.id, 0]));
+            const outDeg = new Map(state.nodes.map(n => [n.id, 0]));
+
+            state.edges.forEach(e => {
+                if (inDeg.has(e.target) && outDeg.has(e.source) && e.source !== e.target) {
+                    inDeg.set(e.target, inDeg.get(e.target) + 1);
+                    outDeg.set(e.source, outDeg.get(e.source) + 1);
+                }
+            });
+
+            // 起点（ルート：入次数0かつ出次数1以上）を特定
+            let roots = state.nodes.filter(n => inDeg.get(n.id) === 0 && outDeg.get(n.id) > 0);
+            if (roots.length === 0) {
+                const connected = state.nodes
+                    .filter(n => (inDeg.get(n.id) + outDeg.get(n.id)) > 0)
+                    .sort((a, b) => (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id)));
+                if (connected.length > 0) roots = [connected[0]];
+            }
+            const rootSet = new Set(roots.map(r => r.id));
+
+            // 初期位置のセットアップ（起点は上部、その他は現在位置ベース＋微小ジッター）
+            const rootSpan = (roots.length - 1) * 280;
+            const simNodes = state.nodes.map((n, idx) => {
+                const inc = inDeg.get(n.id);
+                const out = outDeg.get(n.id);
+                const isRoot = rootSet.has(n.id);
+                const isIsolated = inc === 0 && out === 0;
+
+                let initX = n.x * 0.4 + ((idx % 5) - 2) * 45;
+                let initY = n.y * 0.4;
+                let anchorX = 0;
+
+                if (isRoot) {
+                    const rIdx = roots.findIndex(r => r.id === n.id);
+                    anchorX = -rootSpan / 2 + rIdx * 280;
+                    initX = anchorX;
+                    initY = -260;
+                } else if (isIsolated) {
+                    initY = 260;
+                }
+
+                return {
+                    id: n.id,
+                    x: initX,
+                    y: initY,
+                    vx: 0,
+                    vy: 0,
+                    isRoot,
+                    isIsolated,
+                    anchorX,
+                    degree: inc + out
+                };
+            });
+
+            const simMap = new Map(simNodes.map(s => [s.id, s]));
+            const iterations = 260;
+            const idealSpringLen = 210;
+
+            for (let iter = 0; iter < iterations; iter++) {
+                const cooling = 1 - iter / iterations;
+
+                // 1. ノード間のクーロン反発力（横幅の広いカードに合わせてX軸を広めに反発）
+                for (let i = 0; i < count; i++) {
+                    for (let j = i + 1; j < count; j++) {
+                        const a = simNodes[i];
+                        const b = simNodes[j];
+                        const dx = b.x - a.x;
+                        const dy = (b.y - a.y) * 1.45;
+                        const dist = Math.hypot(dx, dy) || 1;
+
+                        const minSep = 260;
+                        if (dist < minSep * 2.4) {
+                            const repulse = ((minSep * minSep) / (dist * dist)) * 16 * cooling;
+                            const fx = (dx / dist) * repulse;
+                            const fy = (dy / dist) * repulse * 0.65;
+                            a.vx -= fx;
+                            a.vy -= fy;
+                            b.vx += fx;
+                            b.vy += fy;
+                        }
+                    }
+                }
+
+                // 2. エッジのバネ張力 ＋ 有向重力バイアス（終点側が起点側より下へ垂れ下がる力）
+                state.edges.forEach(edge => {
+                    const src = simMap.get(edge.source);
+                    const tgt = simMap.get(edge.target);
+                    if (!src || !tgt || src === tgt) return;
+
+                    const dx = tgt.x - src.x;
+                    const dy = tgt.y - src.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    const displacement = dist - idealSpringLen;
+                    const springForce = displacement * 0.048 * cooling;
+
+                    const fx = (dx / dist) * springForce;
+                    const fy = (dy / dist) * springForce;
+
+                    src.vx += fx * 0.85;
+                    src.vy += fy * 0.65;
+                    tgt.vx -= fx;
+                    tgt.vy -= fy;
+
+                    // 矢印の向き（From -> To）に沿って下向きに引っ張る力
+                    if (tgt.y < src.y + 115) {
+                        const dropForce = (src.y + 115 - tgt.y) * 0.045 * cooling;
+                        tgt.vy += dropForce;
+                        if (!src.isRoot) src.vy -= dropForce * 0.35;
+                    }
+                });
+
+                // 3. 地球の重力（+Y方向）＆ 起点の吊り下げアンカー復元力
+                simNodes.forEach(s => {
+                    if (s.isRoot) {
+                        // 起点は天井のフックに吊るされたように上部へ係留
+                        s.vx += (s.anchorX - s.x) * 0.06 * cooling;
+                        s.vy += (-280 - s.y) * 0.08 * cooling;
+                    } else if (s.isIsolated) {
+                        // 孤立曲は重力のまま底面へ沈降しつつ中央へ寄せる
+                        s.vy += 4.2 * cooling;
+                        s.vx -= s.x * 0.018 * cooling;
+                    } else {
+                        // 接続された曲には常時下向き重力がかかり、バネ張力と釣り合う位置で静止
+                        const gravityG = 3.2 * cooling;
+                        s.vy += gravityG;
+                        // 横方向に広がりすぎないよう中心軸への穏やかな復元力
+                        s.vx -= s.x * 0.012 * cooling;
+                    }
+
+                    // 速度減衰（ダンピング）と位置更新
+                    s.vx *= 0.74;
+                    s.vy *= 0.74;
+                    s.x += s.vx;
+                    s.y += s.vy;
+                });
+
+                // 4. カード矩形サイズ（204x72 + 余白）に基づく衝突解消
+                const boxW = NODE_WIDTH + 34;
+                const boxH = NODE_HEIGHT + 28;
+                for (let i = 0; i < count; i++) {
+                    for (let j = i + 1; j < count; j++) {
+                        const a = simNodes[i];
+                        const b = simNodes[j];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const overlapX = boxW - Math.abs(dx);
+                        const overlapY = boxH - Math.abs(dy);
+
+                        if (overlapX > 0 && overlapY > 0) {
+                            if (overlapX < overlapY) {
+                                const push = (overlapX / 2) * 0.75;
+                                const sign = dx >= 0 ? 1 : -1;
+                                a.x -= sign * push;
+                                b.x += sign * push;
+                            } else {
+                                const push = (overlapY / 2) * 0.75;
+                                const sign = dy >= 0 ? 1 : -1;
+                                a.y -= sign * push;
+                                b.y += sign * push;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 仕上げ：残存する矩形重なりの完全解消と全体の重心センタリング
+            const finalBoxW = NODE_WIDTH + 28;
+            const finalBoxH = NODE_HEIGHT + 24;
+            for (let pass = 0; pass < 25; pass++) {
+                let moved = false;
+                for (let i = 0; i < count; i++) {
+                    for (let j = i + 1; j < count; j++) {
+                        const a = simNodes[i];
+                        const b = simNodes[j];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const overlapX = finalBoxW - Math.abs(dx);
+                        const overlapY = finalBoxH - Math.abs(dy);
+                        if (overlapX > 0 && overlapY > 0) {
+                            moved = true;
+                            if (overlapX < overlapY) {
+                                const shift = overlapX / 2 + 1;
+                                const sign = dx >= 0 ? 1 : -1;
+                                a.x -= sign * shift;
+                                b.x += sign * shift;
+                            } else {
+                                const shift = overlapY / 2 + 1;
+                                const sign = dy >= 0 ? 1 : -1;
+                                a.y -= sign * shift;
+                                b.y += sign * shift;
+                            }
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+
+            const avgX = simNodes.reduce((sum, s) => sum + s.x, 0) / count;
+            const avgY = simNodes.reduce((sum, s) => sum + s.y, 0) / count;
+
+            const targetMap = new Map();
+            simNodes.forEach(s => {
+                targetMap.set(s.id, {
+                    x: Math.round(s.x - avgX),
+                    y: Math.round(s.y - avgY)
+                });
+            });
+
+            animateNodesToPositions(targetMap, '重力整列（物理シミュレーション）');
+        }
+
+        document.getElementById('btn-layout-bpm').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyBpmLayout();
+        };
+
+        document.getElementById('btn-layout-genre').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyGenreClusterLayout();
+        };
+
+        document.getElementById('btn-layout-force').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyForceLayout();
+        };
+
+        document.getElementById('btn-layout-gravity').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyGravityLayout();
+        };
+
+        document.getElementById('btn-layout-genre').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyGenreClusterLayout();
+        };
+
+        document.getElementById('btn-layout-force').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            applyForceLayout();
+        };
+
+        const dataMenuWrapper = document.getElementById('data-menu-wrapper');
+        const dataMenuBtn = document.getElementById('btn-data-menu');
+        const dataDropdown = document.getElementById('data-dropdown');
+
+        dataMenuBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            dataDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (dataMenuWrapper && !dataMenuWrapper.contains(e.target)) {
+                dataDropdown.classList.add('hidden');
+            }
+            if (layoutMenuWrapper && !layoutMenuWrapper.contains(e.target)) {
+                layoutDropdown.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('btn-export-json').onclick = (e) => {
+            e.stopPropagation();
+            dataDropdown.classList.add('hidden');
+            const payload = {
+                version: 2,
+                exportedAt: new Date().toISOString(),
+                nodes: state.nodes,
+                edges: state.edges,
+                setlists: state.setlists,
+                activeSetlistId: state.activeSetlistId
+            };
+            const jsonStr = JSON.stringify(payload, null, 2);
+
+            const triggerDownload = () => {
+                try {
+                    const blob = new Blob([jsonStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `dj-transition-graph-${new Date().toISOString().slice(0, 10)}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (err) {
+                    console.warn('Download blocked:', err);
+                }
+            };
+
+            triggerDownload();
+
+            const exportModal = document.getElementById('export-modal');
+            const exportTextarea = document.getElementById('export-json-text');
+            exportTextarea.value = jsonStr;
+            exportModal.classList.remove('hidden');
+
+            document.getElementById('export-download-retry').onclick = () => {
+                triggerDownload();
+                showToast('ダウンロードを再試行しました');
+            };
+
+            document.getElementById('export-copy-btn').onclick = () => {
+                exportTextarea.focus();
+                exportTextarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('JSONデータをクリップボードにコピーしました');
+                } catch (err) {
+                    showToast('コピーに失敗しました。手動で選択してコピーしてください');
+                }
+            };
+
+            document.getElementById('export-close').onclick = () => {
+                exportModal.classList.add('hidden');
+            };
+        };
+
+        document.getElementById('input-import-json').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+                        throw new Error('Invalid schema');
+                    }
+                    state.nodes = parsed.nodes.map(n => ({ genre: '', ...n }));
+                    state.edges = parsed.edges;
+                    if (Array.isArray(parsed.setlists) && parsed.setlists.length > 0) {
+                        state.setlists = parsed.setlists;
+                        state.activeSetlistId = parsed.activeSetlistId || parsed.setlists[0].id;
+                    } else {
+                        state.setlists = [];
+                        state.activeSetlistId = null;
+                        state.setlist = [];
+                    }
+                    ensureDefaultSetlist();
+                    clearSelection();
+                    updateGenreFilterOptions();
+                    updateSearchCountBadge();
+                    updateTransitionListUI();
+                    updateSetlistUI();
+                    saveToStorage();
+                    fitGraphToScreen();
+                    showToast('JSONデータを読み込みました');
+                } catch (err) {
+                    showToast('JSONファイルの形式が正しくありません');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+            dataDropdown.classList.add('hidden');
+        });
+
+        document.getElementById('btn-load-sample').onclick = (e) => {
+            e.stopPropagation();
+            dataDropdown.classList.add('hidden');
+            showConfirm('サンプルデータの復元', '現在のグラフを上書きして、サンプルのDJつなぎネットワークを読み込みますか？', () => {
+                const sample = getSampleData();
+                state.nodes = sample.nodes;
+                state.edges = sample.edges;
+                state.setlists = [
+                    { id: generateId('sl'), name: 'メイン王道ルート', trackIds: ['n1', 'n2', 'n3', 'n5'] },
+                    { id: generateId('sl'), name: 'ジャズ〜メロディック展開', trackIds: ['n1', 'n4', 'n6', 'n3'] }
+                ];
+                state.activeSetlistId = state.setlists[0].id;
+                syncActiveSetlistArray();
+                clearSelection();
+                updateGenreFilterOptions();
+                updateSearchCountBadge();
+                updateTransitionListUI();
+                updateSetlistUI();
+                saveToStorage();
+                fitGraphToScreen();
+                showToast('サンプルデータを復元しました');
+            });
+        };
+
+        document.getElementById('btn-clear-all').onclick = (e) => {
+            e.stopPropagation();
+            dataDropdown.classList.add('hidden');
+            showConfirm('全消去（新規作成）', 'すべての楽曲とつなぎデータを消去して白紙から始めますか？', () => {
+                state.nodes = [];
+                state.edges = [];
+                state.setlists = [];
+                state.activeSetlistId = null;
+                state.setlist = [];
+                ensureDefaultSetlist();
+                clearSelection();
+                updateGenreFilterOptions();
+                updateSearchCountBadge();
+                updateTransitionListUI();
+                updateSetlistUI();
+                saveToStorage();
+                fitGraphToScreen();
+                showToast('グラフをクリアしました');
+            });
+        };
+
+        // 左右パネル開閉＆左パネル絞り込みイベント
+        document.getElementById('btn-toggle-left-sidebar').onclick = toggleLeftSidebar;
+        document.getElementById('btn-close-left-sidebar').onclick = closeLeftSidebar;
+        document.getElementById('btn-toggle-sidebar').onclick = toggleSidebar;
+        document.getElementById('btn-close-sidebar').onclick = closeSidebar;
+
+        const transitionFilterInput = document.getElementById('transition-list-filter');
+        const clearTransitionFilterBtn = document.getElementById('btn-clear-transition-filter');
+        transitionFilterInput.addEventListener('input', () => {
+            if (transitionFilterInput.value) clearTransitionFilterBtn.classList.remove('hidden');
+            else clearTransitionFilterBtn.classList.add('hidden');
+            updateTransitionListUI();
+        });
+        clearTransitionFilterBtn.onclick = () => {
+            transitionFilterInput.value = '';
+            clearTransitionFilterBtn.classList.add('hidden');
+            updateTransitionListUI();
+        };
+        document.getElementById('transition-list-sort').addEventListener('change', updateTransitionListUI);
+
+        // キーボードショートカット (Ctrl+F / Escape / Delete)
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                const searchEl = document.getElementById('search-input');
+                if (searchEl) {
+                    searchEl.focus();
+                    searchEl.select();
+                }
+                return;
+            }
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+                if (e.key === 'Escape' && document.activeElement.id === 'search-input') {
+                    handleSearchInput('');
+                    document.activeElement.blur();
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                setConnectMode(false);
+                clearSelection();
+                document.getElementById('export-modal').classList.add('hidden');
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (state.selectedNodeId) deleteNode(state.selectedNodeId);
+                else if (state.selectedEdgeId) deleteEdge(state.selectedEdgeId);
+            }
+        });
+
+        // ==========================================
+        // 13. 初期化エントリーポイント
+        // ==========================================
+        window.addEventListener('resize', () => {
+            syncLeftSidebarToggleButton();
+            syncSidebarToggleButton();
+            resizeCanvas();
+        });
+
+        window.onload = function () {
+            lucide.createIcons();
+            const loaded = loadFromStorage();
+            if (!loaded) {
+                const sample = getSampleData();
+                state.nodes = sample.nodes;
+                state.edges = sample.edges;
+                state.setlists = [
+                    { id: generateId('sl'), name: 'メイン王道ルート', trackIds: ['n1', 'n2', 'n3', 'n5'] },
+                    { id: generateId('sl'), name: 'ジャズ〜メロディック展開', trackIds: ['n1', 'n4', 'n6', 'n3'] }
+                ];
+                state.activeSetlistId = state.setlists[0].id;
+                syncActiveSetlistArray();
+                saveToStorage();
+            }
+            updateGenreFilterOptions();
+            updateSearchCountBadge();
+            updateInspector();
+            updateTransitionListUI();
+            updateSetlistUI();
+            syncLeftSidebarToggleButton();
+            syncSidebarToggleButton();
+            resizeCanvas();
+            fitGraphToScreen();
+        };
+    </script>
+</body>
+</html>
