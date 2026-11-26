@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DJ Transition Graph - 楽曲つなぎメモ＆ルーティング</title>
+    <title>TRANSITION DECK - DJ 楽曲つなぎ＆ルーティング・グラフ</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter & JetBrains Mono -->
@@ -46,7 +46,6 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        /* カスタムスクロールバー */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -70,6 +69,9 @@
         }
         .glow-pink {
             box-shadow: 0 0 15px rgba(236, 72, 153, 0.25);
+        }
+        .glow-amber {
+            box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
         }
     </style>
 </head>
@@ -109,11 +111,25 @@
                 <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
                 <span class="hidden md:inline">フォーカス</span>
             </button>
-            <button id="btn-setlist-mode" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition" title="クリック順にセットリストを構築">
+            <button id="btn-setlist-mode" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition" title="セトリの記録・選択・強調表示">
                 <i data-lucide="list-music" class="w-3.5 h-3.5"></i>
-                <span class="hidden md:inline">ルート記録</span>
+                <span class="hidden md:inline">セトリ記録</span>
             </button>
             <div class="h-4 w-px bg-dj-border mx-0.5"></div>
+
+            <!-- リアルタイム重力トグルボタン -->
+            <button type="button" id="btn-realtime-gravity" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition cursor-pointer" title="1秒ごとに擬似球座標の重力シミュレーションをリアルタイム更新 (ON/OFF)">
+                <i data-lucide="orbit" class="w-3.5 h-3.5 text-dj-amber pointer-events-none"></i>
+                <span class="hidden lg:inline pointer-events-none">球重力LIVE</span>
+                <span id="gravity-live-dot" class="hidden w-1.5 h-1.5 rounded-full bg-dj-amber animate-ping pointer-events-none"></span>
+            </button>
+
+            <!-- 3D球体回転モードトグル -->
+            <button type="button" id="btn-sphere-orbit" class="hidden items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface border border-transparent transition cursor-pointer" title="ドラッグで擬似球座標空間を3D回転 (Alt+ドラッグ / 右ドラッグでも回転可能)">
+                <i data-lucide="globe" class="w-3.5 h-3.5 text-dj-cyan pointer-events-none"></i>
+                <span class="hidden xl:inline pointer-events-none">球体回転</span>
+            </button>
+
             <!-- 自動整列ドロップダウンメニュー -->
             <div class="relative" id="layout-menu-wrapper">
                 <button type="button" id="btn-layout-menu" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-dj-surface hover:text-white border border-transparent transition cursor-pointer" title="グラフを自動整列">
@@ -121,7 +137,7 @@
                     <span class="hidden sm:inline pointer-events-none">自動整列</span>
                     <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 pointer-events-none"></i>
                 </button>
-                <div id="layout-dropdown" class="hidden absolute left-0 mt-2 w-64 bg-dj-panel border border-dj-border rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+                <div id="layout-dropdown" class="hidden absolute left-0 mt-2 w-72 bg-dj-panel border border-dj-border rounded-xl shadow-2xl py-1.5 z-50 text-xs">
                     <div class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">オートレイアウト整列</div>
                     <button type="button" id="btn-layout-bpm" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
                         <i data-lucide="arrow-right-from-line" class="w-4 h-4 text-dj-cyan shrink-0 mt-0.5 pointer-events-none"></i>
@@ -140,16 +156,24 @@
                     <button type="button" id="btn-layout-force" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
                         <i data-lucide="network" class="w-4 h-4 text-dj-emerald shrink-0 mt-0.5 pointer-events-none"></i>
                         <div class="pointer-events-none">
-                            <div class="font-medium text-white">力学整列（終点外側配置）</div>
-                            <div class="text-[10px] text-slate-400">起点を中心、つなぎの終点を外周に配置</div>
+                            <div class="font-medium text-white">力学整列（放射線・終点外側）</div>
+                            <div class="text-[10px] text-slate-400">起点を中心、一直線ルートを外周へ放射配置</div>
                         </div>
                     </button>
                     <button type="button" id="btn-layout-gravity" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-start gap-2.5 text-slate-200 cursor-pointer">
-                        <i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-dj-pink shrink-0 mt-0.5 pointer-events-none"></i>
+                        <i data-lucide="globe" class="w-4 h-4 text-dj-amber shrink-0 mt-0.5 pointer-events-none"></i>
                         <div class="pointer-events-none">
-                            <div class="font-medium text-white">重力整列（物理シミュレーション）</div>
-                            <div class="text-[10px] text-slate-400">起点から下向き重力とバネ張力で有機的に整列</div>
+                            <div class="font-medium text-white">擬似球座標・重力整列（内 → 外）</div>
+                            <div class="text-[10px] text-slate-400">起点を中心核に、外向き球面重力で立体配置</div>
                         </div>
+                    </button>
+                    <div class="my-1 border-t border-dj-border"></div>
+                    <button type="button" id="btn-menu-realtime-gravity" class="w-full px-3.5 py-2 text-left hover:bg-dj-surface flex items-center justify-between text-slate-200 cursor-pointer">
+                        <span class="flex items-center gap-2 pointer-events-none">
+                            <i data-lucide="orbit" class="w-3.5 h-3.5 text-dj-amber"></i>
+                            <span>球座標リアルタイム重力（1秒更新）</span>
+                        </span>
+                        <span id="menu-gravity-status" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-surface text-slate-400 pointer-events-none">OFF</span>
                     </button>
                 </div>
             </div>
@@ -164,7 +188,7 @@
                 </select>
             </div>
 
-            <!-- 常設検索バー（タイトル・アーティスト・メモ・BPM・キー合致強調） -->
+            <!-- 常設検索バー -->
             <div class="relative flex items-center min-w-0">
                 <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                 <input type="text" id="search-input" placeholder="タイトル・アーティスト・メモ検索..." class="bg-dj-surface border border-dj-border rounded-lg pl-8 pr-16 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-dj-cyan focus:ring-1 focus:ring-dj-cyan/40 w-36 sm:w-52 lg:w-64 transition">
@@ -181,7 +205,6 @@
                 <button type="button" id="btn-data-menu" class="p-2 rounded-lg bg-dj-surface hover:bg-dj-border/60 border border-dj-border text-slate-300 transition cursor-pointer" title="データ管理 (JSON / サンプル / リセット)">
                     <i data-lucide="folder-cog" class="w-4 h-4 pointer-events-none"></i>
                 </button>
-                <!-- ドロップダウン -->
                 <div id="data-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-dj-panel border border-dj-border rounded-xl shadow-2xl py-1.5 z-50 text-xs">
                     <button type="button" id="btn-export-json" class="w-full px-3.5 py-2.5 text-left hover:bg-dj-surface flex items-center gap-2 text-slate-200 cursor-pointer">
                         <i data-lucide="download" class="w-3.5 h-3.5 text-dj-cyan pointer-events-none"></i> JSONエクスポート
@@ -200,7 +223,7 @@
                 </div>
             </div>
 
-            <!-- 編集パネル（インスペクター）開閉トグルボタン（全画面サイズ対応） -->
+            <!-- 編集パネル（インスペクター）開閉トグルボタン -->
             <button type="button" id="btn-toggle-sidebar" class="p-2 rounded-lg bg-dj-cyan/15 hover:bg-dj-cyan/25 border border-dj-cyan/40 text-dj-cyan transition cursor-pointer shrink-0" title="編集パネルの表示／非表示を切り替え">
                 <i data-lucide="panel-right-close" class="w-4 h-4 pointer-events-none"></i>
             </button>
@@ -212,7 +235,6 @@
 
         <!-- 左サイドバー（つなぎ一覧リスト） -->
         <aside id="transition-list-sidebar" class="fixed md:static inset-y-0 left-0 top-14 md:top-0 w-72 lg:w-80 bg-dj-panel border-r border-dj-border flex flex-col z-30 transform -translate-x-full md:translate-x-0 transition-all duration-200 ease-out shrink-0">
-            <!-- ヘッダー -->
             <div class="px-3.5 py-2.5 border-b border-dj-border flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2">
                     <i data-lucide="git-merge" class="w-4 h-4 text-dj-pink"></i>
@@ -224,7 +246,6 @@
                 </button>
             </div>
 
-            <!-- 絞り込み & 並び替えバー -->
             <div class="p-2.5 border-b border-dj-border/70 bg-dj-bg/40 space-y-2 shrink-0">
                 <div class="relative">
                     <i data-lucide="filter" class="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
@@ -244,7 +265,6 @@
                 </div>
             </div>
 
-            <!-- つなぎリスト本体 -->
             <div id="transition-list-items" class="flex-1 overflow-y-auto p-2.5 space-y-2"></div>
         </aside>
 
@@ -258,6 +278,14 @@
                     <span class="w-2 h-2 rounded-full bg-dj-pink animate-ping"></span>
                     <span id="mode-banner-text">つなぎ作成モード：出発曲から到着曲へドラッグ（または順にクリック）</span>
                     <button id="btn-cancel-mode" class="ml-2 text-xs underline hover:text-white">終了</button>
+                </div>
+
+                <!-- リアルタイム重力稼働バッジ -->
+                <div id="gravity-live-banner" class="hidden pointer-events-auto px-3 py-1.5 rounded-lg bg-dj-amber/15 border border-dj-amber/50 text-amber-200 text-xs font-medium flex items-center gap-2 backdrop-blur-md">
+                    <span class="w-2 h-2 rounded-full bg-dj-amber animate-ping"></span>
+                    <span>球座標重力LIVE稼働中（1秒更新・Alt+ドラッグ/右ドラッグで球体回転）</span>
+                    <button type="button" id="btn-reset-sphere-rot" class="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-dj-surface/80 hover:bg-dj-surface text-amber-100 border border-amber-400/30 cursor-pointer">角度リセット</button>
+                    <button type="button" id="btn-stop-gravity-banner" class="ml-1 text-[11px] underline hover:text-white cursor-pointer">停止</button>
                 </div>
 
                 <!-- モバイル用ジャンルフィルター -->
@@ -291,42 +319,46 @@
                 </div>
             </div>
 
-            <!-- 下部セットリスト（ルート構築）ドロワー -->
+            <!-- 下部セットリスト（記録・選択・強調）ドロワー -->
             <div id="setlist-drawer" class="hidden absolute bottom-3 right-3 left-3 sm:left-auto sm:w-[460px] bg-dj-panel/95 backdrop-blur-md border border-dj-border rounded-2xl shadow-2xl p-3.5 z-10 transition-all">
+                <!-- セトリ選択＆管理ヘッダー -->
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <div class="flex items-center gap-1.5 min-w-0 flex-1">
                         <i data-lucide="list-music" class="w-4 h-4 text-dj-emerald shrink-0"></i>
-                        <select id="setlist-selector" class="bg-dj-surface border border-dj-border rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-dj-emerald truncate max-w-[175px] cursor-pointer" title="表示・編集するセトリを選択">
-                            <option value="">(未選択)</option>
+                        <select id="setlist-select" class="bg-dj-surface border border-dj-border rounded-lg px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-dj-emerald truncate max-w-[180px] cursor-pointer" title="表示・編集するセトリを選択（選択中のセトリの曲が強調表示されます）">
                         </select>
-                        <button type="button" id="btn-new-setlist" class="p-1 rounded-lg bg-dj-emerald/15 hover:bg-dj-emerald/25 border border-dj-emerald/40 text-dj-emerald transition shrink-0" title="新しいセトリを作成">
+                        <button type="button" id="btn-new-setlist" class="p-1 rounded-lg bg-dj-surface hover:bg-dj-emerald/20 text-dj-emerald border border-dj-border transition cursor-pointer" title="新しいセトリを作成">
                             <i data-lucide="plus" class="w-3.5 h-3.5 pointer-events-none"></i>
                         </button>
-                        <button type="button" id="btn-rename-setlist" class="p-1 rounded-lg bg-dj-surface hover:bg-dj-border border border-dj-border text-slate-300 transition shrink-0" title="セトリ名を変更">
+                        <button type="button" id="btn-rename-setlist" class="p-1 rounded-lg bg-dj-surface hover:bg-dj-border text-slate-300 border border-dj-border transition cursor-pointer" title="セトリ名を変更">
                             <i data-lucide="pencil" class="w-3 h-3 pointer-events-none"></i>
                         </button>
-                        <span id="setlist-count" class="text-[10px] font-mono px-1.5 py-0.5 bg-dj-surface rounded text-dj-emerald shrink-0">0曲</span>
-                    </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                        <button type="button" id="btn-toggle-setlist-highlight" class="px-2 py-1 rounded bg-dj-emerald/20 text-dj-emerald border border-dj-emerald/40 text-[10px] font-medium flex items-center gap-1 transition" title="選択中のセトリをキャンバスで強調表示">
-                            <i data-lucide="sparkles" class="w-3 h-3 pointer-events-none"></i>
-                            <span class="hidden sm:inline pointer-events-none">強調</span>
-                        </button>
-                        <button type="button" id="btn-copy-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-dj-border text-slate-300" title="テキストでコピー">
-                            <i data-lucide="copy" class="w-3 h-3 pointer-events-none"></i>
-                        </button>
-                        <button type="button" id="btn-clear-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-amber-500/20 text-slate-400 hover:text-amber-300" title="このセトリの曲を空にする">
-                            <i data-lucide="eraser" class="w-3 h-3 pointer-events-none"></i>
-                        </button>
-                        <button type="button" id="btn-delete-setlist" class="p-1.5 rounded bg-dj-surface hover:bg-red-500/20 text-slate-400 hover:text-red-400" title="このセトリを削除">
+                        <button type="button" id="btn-delete-setlist" class="p-1 rounded-lg bg-dj-surface hover:bg-red-500/20 text-slate-400 hover:text-red-300 border border-dj-border transition cursor-pointer" title="このセトリを削除">
                             <i data-lucide="trash-2" class="w-3 h-3 pointer-events-none"></i>
                         </button>
                     </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span id="setlist-count" class="text-[11px] font-mono px-1.5 py-0.5 bg-dj-surface rounded text-dj-emerald">0曲</span>
+                        <button type="button" id="btn-copy-setlist" class="px-2 py-1 rounded bg-dj-surface hover:bg-dj-border text-[11px] text-slate-300 flex items-center gap-1 cursor-pointer" title="テキストでコピー">
+                            <i data-lucide="copy" class="w-3 h-3 pointer-events-none"></i> コピー
+                        </button>
+                    </div>
                 </div>
-                
+
+                <!-- 記録モード切り替えバー -->
+                <div class="flex items-center justify-between bg-dj-surface/60 border border-dj-border/80 rounded-lg px-2.5 py-1.5 mb-2 text-[11px]">
+                    <label class="flex items-center gap-2 cursor-pointer text-slate-200 select-none">
+                        <input type="checkbox" id="chk-setlist-record" checked class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer">
+                        <span>曲クリックでセトリ末尾に追加記録</span>
+                    </label>
+                    <button type="button" id="btn-clear-setlist" class="text-[11px] text-slate-400 hover:text-red-300 underline cursor-pointer">
+                        曲を空にする
+                    </button>
+                </div>
+
                 <!-- BPM推移ミニスパークライン -->
                 <div id="bpm-chart-container" class="h-10 w-full bg-dj-bg/80 rounded-lg border border-dj-border/60 mb-2 px-2 py-1 flex items-center justify-between">
-                    <span class="text-[10px] text-slate-500">曲をクリックしてルートに追加...</span>
+                    <span class="text-[10px] text-slate-500">曲をクリックしてセトリに追加...</span>
                 </div>
 
                 <!-- ルートリスト -->
@@ -336,8 +368,6 @@
 
         <!-- 右サイドバー（インスペクター） -->
         <aside id="inspector-sidebar" class="fixed md:static inset-y-0 right-0 top-14 md:top-0 w-80 lg:w-96 bg-dj-panel border-l border-dj-border flex flex-col z-30 transform translate-x-full md:translate-x-0 transition-all duration-200 ease-out shrink-0">
-            
-            <!-- インスペクターヘッダー -->
             <div class="px-4 py-3 border-b border-dj-border flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-2">
                     <i data-lucide="sliders" class="w-4 h-4 text-dj-cyan"></i>
@@ -348,9 +378,7 @@
                 </button>
             </div>
 
-            <!-- インスペクター本体（スクロール領域） -->
             <div id="inspector-content" class="flex-1 overflow-y-auto p-4 space-y-5">
-                
                 <!-- 未選択時のダッシュボード概要 -->
                 <div id="view-empty" class="space-y-4">
                     <div class="p-4 rounded-xl bg-dj-surface/50 border border-dj-border text-center space-y-2">
@@ -363,7 +391,6 @@
                         </p>
                     </div>
 
-                    <!-- 統計サマリー -->
                     <div class="grid grid-cols-2 gap-2.5">
                         <div class="p-3 rounded-xl bg-dj-surface/40 border border-dj-border">
                             <div class="text-[11px] text-slate-400">登録楽曲数</div>
@@ -375,7 +402,6 @@
                         </div>
                     </div>
 
-                    <!-- キー相性クイックガイド（Camelot） -->
                     <div class="p-3.5 rounded-xl bg-dj-surface/30 border border-dj-border space-y-2">
                         <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-200">
                             <i data-lucide="music" class="w-3.5 h-3.5 text-dj-purple"></i>
@@ -427,7 +453,6 @@
                                 <option value="Ambient">
                                 <option value="J-Pop / Anisong">
                             </datalist>
-                            <!-- クイックジャンル選択チップ -->
                             <div id="genre-quick-chips" class="flex flex-wrap gap-1 mt-1.5"></div>
                         </div>
 
@@ -444,9 +469,7 @@
 
                         <div>
                             <label class="block text-[11px] text-slate-400 mb-1.5">カラータグ（ジャンル / 雰囲気）</label>
-                            <div id="node-colors" class="flex items-center gap-2">
-                                <!-- JSで生成 -->
-                            </div>
+                            <div id="node-colors" class="flex items-center gap-2"></div>
                         </div>
 
                         <div>
@@ -455,7 +478,6 @@
                         </div>
                     </div>
 
-                    <!-- この曲からのつなぎ一覧 (Out-degree) -->
                     <div class="pt-3 border-t border-dj-border space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-semibold text-dj-cyan flex items-center gap-1.5">
@@ -466,7 +488,6 @@
                         <div id="node-out-list" class="space-y-1.5"></div>
                     </div>
 
-                    <!-- この曲へ来るつなぎ一覧 (In-degree) -->
                     <div class="pt-3 border-t border-dj-border space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-semibold text-dj-purple flex items-center gap-1.5">
@@ -487,7 +508,6 @@
                         </button>
                     </div>
 
-                    <!-- 接続方向ビジュアルカード -->
                     <div class="p-3 rounded-xl bg-dj-surface border border-dj-border space-y-2">
                         <div class="flex items-center justify-between text-[11px] text-slate-400">
                             <span>FROM (現在の曲)</span>
@@ -506,12 +526,10 @@
                         <div id="edge-target-name" class="text-xs font-bold text-white truncate"></div>
                     </div>
 
-                    <!-- 編集フィールド -->
                     <div class="space-y-3">
                         <div>
                             <label class="block text-[11px] text-slate-400 mb-1">つなぎ手法・ラベル</label>
                             <input type="text" id="edge-label" placeholder="例: ロングミックス, EQスワップ, カットイン" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-pink">
-                            <!-- クイックタグプリセット -->
                             <div class="flex flex-wrap gap-1 mt-1.5" id="edge-presets">
                                 <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">ロングミックス</button>
                                 <button type="button" class="preset-tag px-2 py-0.5 rounded bg-dj-surface hover:bg-dj-border text-[10px] text-slate-300 border border-dj-border">EQスワップ</button>
@@ -524,9 +542,7 @@
 
                         <div>
                             <label class="block text-[11px] text-slate-400 mb-1">鉄板度・相性ランク</label>
-                            <div id="edge-rating-stars" class="flex items-center gap-1">
-                                <!-- JSで生成 -->
-                            </div>
+                            <div id="edge-rating-stars" class="flex items-center gap-1"></div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-2.5">
@@ -539,9 +555,7 @@
                             </div>
                             <div>
                                 <label class="block text-[11px] text-slate-400 mb-1">ラインカラー</label>
-                                <div id="edge-colors" class="flex items-center gap-1.5 h-8">
-                                    <!-- JSで生成 -->
-                                </div>
+                                <div id="edge-colors" class="flex items-center gap-1.5 h-8"></div>
                             </div>
                         </div>
 
@@ -551,7 +565,6 @@
                         </div>
                     </div>
                 </div>
-
             </div>
         </aside>
     </div>
@@ -570,7 +583,22 @@
         </div>
     </div>
 
-    <!-- JSONエクスポート／バックアップモーダル（サンドボックス環境対応） -->
+    <!-- セトリ作成／名前変更モーダル -->
+    <div id="setlist-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <h3 id="setlist-modal-title" class="text-sm font-bold text-white">新しいセトリを作成</h3>
+            <div>
+                <label class="block text-[11px] text-slate-400 mb-1">セトリ名</label>
+                <input type="text" id="setlist-modal-input" placeholder="例: 序盤ウォームアップ / ピークタイム用" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-emerald">
+            </div>
+            <div class="flex justify-end gap-2 pt-1">
+                <button id="setlist-modal-cancel" class="px-3.5 py-1.5 rounded-lg bg-dj-surface hover:bg-dj-border text-xs text-slate-300">キャンセル</button>
+                <button id="setlist-modal-ok" class="px-4 py-1.5 rounded-lg bg-dj-emerald hover:bg-emerald-400 text-xs font-bold text-slate-950">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSONエクスポート／バックアップモーダル -->
     <div id="export-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-3.5">
             <div class="flex items-center justify-between">
@@ -597,25 +625,10 @@
         </div>
     </div>
 
-    <!-- セトリ名入力モーダル -->
-    <div id="setlist-name-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-dj-panel border border-dj-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-            <h3 id="setlist-modal-title" class="text-sm font-bold text-white flex items-center gap-2">
-                <i data-lucide="list-music" class="w-4 h-4 text-dj-emerald"></i>
-                <span>セトリ名を入力</span>
-            </h3>
-            <input type="text" id="setlist-name-input" placeholder="例: 深夜ラウンジセット / Peak Time" class="w-full bg-dj-surface border border-dj-border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-dj-emerald">
-            <div class="flex justify-end gap-2">
-                <button type="button" id="setlist-modal-cancel" class="px-3.5 py-1.5 rounded-lg bg-dj-surface hover:bg-dj-border text-xs text-slate-300">キャンセル</button>
-                <button type="button" id="setlist-modal-ok" class="px-4 py-1.5 rounded-lg bg-dj-emerald hover:bg-emerald-400 text-xs font-bold text-slate-950">保存</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         /**
-         * DJ Transition Graph Application
-         * 有向グラフ描画・編集エンジン＆UIコントローラー
+         * TRANSITION DECK - DJ Transition Graph Application
+         * 有向グラフ描画・編集エンジン＆リアルタイム重力シミュレーション
          */
 
         // ==========================================
@@ -645,7 +658,6 @@
             'Hardcore', 'Trance', 'Hip-Hop', 'Funkot', 'J-Pop'
         ];
 
-        // エレクトロニック〜UKG〜ハードコア〜ジャズ/フュージョン風の架空・定番つなぎネットワーク
         function getSampleData() {
             return {
                 nodes: [
@@ -793,7 +805,15 @@
                         color: '#ec4899',
                         memo: 'Liquid Horizonの2回目のブレイク無音部分でHyperdriveのビルドアップを頭出し！'
                     }
-                ]
+                ],
+                setlists: [
+                    {
+                        id: 'sl_default',
+                        name: 'メインルート候補 #1',
+                        tracks: ['n1', 'n2', 'n3', 'n5']
+                    }
+                ],
+                activeSetlistId: 'sl_default'
             };
         }
 
@@ -811,12 +831,16 @@
             // モード設定
             connectMode: false,
             connectSourceId: null,
-            focusMode: true,      // 選択ノードの1ホップ先を強調
-            setlistMode: false,   // クリック順ルート記録
-            setlistHighlight: true, // 選択中のセトリをキャンバスで強調表示
-            setlists: [],         // [{ id, name, trackIds: [] }]
+            focusMode: true,
+            setlistMode: false,
+            setlistRecordEnabled: true,
+            setlists: [],
             activeSetlistId: null,
-            setlist: [],          // 互換用（activeSetlistのtrackIdsと同期）
+            realtimeGravity: false,
+            sphereMode: false,
+            sphereOrbitMode: false,
+            sphereRot: { yaw: 0.35, pitch: -0.22 },
+            sphereMaxRadius: 480,
             searchQuery: '',
             selectedGenreFilter: '',
             // カメラ（パン＆ズーム）
@@ -831,6 +855,8 @@
             dragOffset: { x: 0, y: 0 },
             isPanning: false,
             panStart: { x: 0, y: 0 },
+            isRotatingSphere: false,
+            rotateStart: { x: 0, y: 0, yaw: 0, pitch: 0 },
             isDrawingEdge: false,
             drawEdgeSourceId: null,
             pointerWorld: { x: 0, y: 0 },
@@ -838,38 +864,141 @@
             hasMovedDuringDrag: false
         };
 
-        // ノード描画寸法定数（ワールド座標系）
+                function sanitizeGraphCoordinates() {
+            state.nodes.forEach((n, idx) => {
+                const nx = Number(n.x);
+                const ny = Number(n.y);
+                if (!Number.isFinite(nx)) {
+                    const angle = idx * 2.39996;
+                    const radius = 140 + Math.sqrt(idx) * 95;
+                    n.x = Math.round(Math.cos(angle) * radius);
+                } else {
+                    n.x = nx;
+                }
+                if (!Number.isFinite(ny)) {
+                    const angle = idx * 2.39996;
+                    const radius = 140 + Math.sqrt(idx) * 95;
+                    n.y = Math.round(Math.sin(angle) * radius);
+                } else {
+                    n.y = ny;
+                }
+                if (typeof n.z !== 'number' || !Number.isFinite(n.z)) {
+                    n.z = 0;
+                }
+            });
+            if (!Number.isFinite(state.camera.x)) state.camera.x = 0;
+            if (!Number.isFinite(state.camera.y)) state.camera.y = 0;
+            if (!Number.isFinite(state.camera.zoom) || state.camera.zoom <= 0) state.camera.zoom = 1;
+            if (!state.sphereRot || !Number.isFinite(state.sphereRot.yaw)) state.sphereRot = { yaw: 0.35, pitch: -0.22 };
+            if (!Number.isFinite(state.sphereRot.pitch)) state.sphereRot.pitch = -0.22;
+        }
+
+        // 擬似3D球座標 (r, theta, phi) <-> 3D直交座標 <-> 2D画面投影ヘルパー
+        function sphericalToCartesian3D(r, theta, phi) {
+            const cosPhi = Math.cos(phi);
+            return {
+                x3: r * cosPhi * Math.cos(theta),
+                y3: r * Math.sin(phi),
+                z3: r * cosPhi * Math.sin(theta)
+            };
+        }
+
+        function rotate3DPoint(x3, y3, z3, yaw, pitch) {
+            const cosY = Math.cos(yaw);
+            const sinY = Math.sin(yaw);
+            const x1 = x3 * cosY - z3 * sinY;
+            const z1 = x3 * sinY + z3 * cosY;
+
+            const cosP = Math.cos(pitch);
+            const sinP = Math.sin(pitch);
+            const y2 = y3 * cosP - z1 * sinP;
+            const z2 = y3 * sinP + z1 * cosP;
+
+            return { x: x1, y: y2, z: z2 };
+        }
+
+        function unrotate3DPoint(x, y, z, yaw, pitch) {
+            const cosP = Math.cos(-pitch);
+            const sinP = Math.sin(-pitch);
+            const y1 = y * cosP - z * sinP;
+            const z1 = y * sinP + z * cosP;
+
+            const cosY = Math.cos(-yaw);
+            const sinY = Math.sin(-yaw);
+            const x2 = x * cosY - z1 * sinY;
+            const z2 = x * sinY + z1 * cosY;
+
+            return { x3: x2, y3: y1, z3: z2 };
+        }
+
+        function projectAllSphereNodes() {
+            if (!state.sphereMode) return;
+            const yaw = state.sphereRot.yaw;
+            const pitch = state.sphereRot.pitch;
+            let observedMaxZ = 180;
+            state.nodes.forEach(n => {
+                if (typeof n.r === 'number' && typeof n.theta === 'number' && typeof n.phi === 'number') {
+                    const c3 = sphericalToCartesian3D(n.r, n.theta, n.phi);
+                    n.x3 = c3.x3;
+                    n.y3 = c3.y3;
+                    n.z3 = c3.z3;
+                } else {
+                    n.x3 = n.x || 0;
+                    n.y3 = n.y || 0;
+                    n.z3 = n.z || 0;
+                }
+                const rot = rotate3DPoint(n.x3, n.y3, n.z3, yaw, pitch);
+                const focal = 1500;
+                const persp = focal / Math.max(520, focal - rot.z);
+                n.x = Math.round(rot.x * persp);
+                n.y = Math.round(rot.y * persp);
+                n.z = rot.z;
+                n._persp = persp;
+                observedMaxZ = Math.max(observedMaxZ, Math.abs(rot.z));
+            });
+            state.sphereMaxRadius = observedMaxZ;
+        }
+
+        function getNodeDepthMetrics(node) {
+            if (!state.sphereMode) {
+                return { scale: 1, alphaFactor: 1, z: 0, normZ: 0 };
+            }
+            const maxR = Math.max(220, state.sphereMaxRadius || 420);
+            const normZ = Math.max(-1, Math.min(1, (node.z || 0) / maxR));
+            // 手前 (normZ = +1) は 1.18倍・不透明度 1.0、奥 (normZ = -1) は 0.52倍・不透明度 0.24 まで明確に遠近感を出す
+            const t = (normZ + 1) / 2; // 0.0 (最奥) 〜 1.0 (最手前)
+            const eased = t * t * (3 - 2 * t); // smoothstep
+            const scale = 0.52 + eased * 0.66;       // 0.52 〜 1.18
+            const alphaFactor = 0.24 + eased * 0.76; // 0.24 〜 1.00
+            return { scale, alphaFactor, z: node.z || 0, normZ };
+        }
+
         const NODE_WIDTH = 204;
         const NODE_HEIGHT = 72;
         const NODE_RADIUS = 12;
 
+        function getActiveSetlist() {
+            if (!Array.isArray(state.setlists) || state.setlists.length === 0) return null;
+            let found = state.setlists.find(s => s.id === state.activeSetlistId);
+            if (!found) {
+                found = state.setlists[0];
+                state.activeSetlistId = found.id;
+            }
+            return found;
+        }
+
+        function getActiveSetlistTracks() {
+            const sl = getActiveSetlist();
+            if (!sl) return [];
+            if (!Array.isArray(sl.tracks)) {
+                sl.tracks = [];
+            }
+            return sl.tracks;
+        }
+
         // ==========================================
         // 3. 永続化 (LocalStorage) & ユーティリティ
         // ==========================================
-        function getActiveSetlist() {
-            return state.setlists.find(s => s.id === state.activeSetlistId) || null;
-        }
-
-        function syncActiveSetlistArray() {
-            const active = getActiveSetlist();
-            state.setlist = active ? active.trackIds : [];
-        }
-
-        function ensureDefaultSetlist() {
-            if (!Array.isArray(state.setlists) || state.setlists.length === 0) {
-                const defaultSet = {
-                    id: generateId('sl'),
-                    name: 'メインセトリ #1',
-                    trackIds: Array.isArray(state.setlist) ? [...state.setlist] : []
-                };
-                state.setlists = [defaultSet];
-                state.activeSetlistId = defaultSet.id;
-            } else if (!state.activeSetlistId || !state.setlists.some(s => s.id === state.activeSetlistId)) {
-                state.activeSetlistId = state.setlists[0].id;
-            }
-            syncActiveSetlistArray();
-        }
-
         function saveToStorage() {
             try {
                 const payload = {
@@ -877,7 +1006,9 @@
                     edges: state.edges,
                     setlists: state.setlists,
                     activeSetlistId: state.activeSetlistId,
-                    setlist: state.setlist
+                    sphereMode: state.sphereMode,
+                    sphereRot: state.sphereRot,
+                    sphereMaxRadius: state.sphereMaxRadius
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
             } catch (e) {
@@ -891,18 +1022,33 @@
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     if (Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-                        // 後方互換性: genreフィールドがない場合は空文字で補完
                         state.nodes = parsed.nodes.map(n => ({ genre: '', ...n }));
                         state.edges = parsed.edges;
                         if (Array.isArray(parsed.setlists) && parsed.setlists.length > 0) {
                             state.setlists = parsed.setlists;
                             state.activeSetlistId = parsed.activeSetlistId || parsed.setlists[0].id;
+                        } else if (Array.isArray(parsed.setlist)) {
+                            state.setlists = [{
+                                id: 'sl_default',
+                                name: 'セトリ #1',
+                                tracks: parsed.setlist
+                            }];
+                            state.activeSetlistId = 'sl_default';
                         } else {
-                            state.setlist = Array.isArray(parsed.setlist) ? parsed.setlist : [];
-                            state.setlists = [];
-                            state.activeSetlistId = null;
+                            state.setlists = [{ id: 'sl_default', name: 'セトリ #1', tracks: [] }];
+                            state.activeSetlistId = 'sl_default';
                         }
-                        ensureDefaultSetlist();
+                        state.sphereMode = Boolean(parsed.sphereMode);
+                        if (parsed.sphereRot && Number.isFinite(parsed.sphereRot.yaw) && Number.isFinite(parsed.sphereRot.pitch)) {
+                            state.sphereRot = parsed.sphereRot;
+                        }
+                        if (Number.isFinite(parsed.sphereMaxRadius)) {
+                            state.sphereMaxRadius = parsed.sphereMaxRadius;
+                        }
+                        sanitizeGraphCoordinates();
+                        if (state.sphereMode) {
+                            projectAllSphereNodes();
+                        }
                         return true;
                     }
                 }
@@ -950,6 +1096,42 @@
             };
         }
 
+        function showSetlistPrompt(title, defaultValue, onSave) {
+            const modal = document.getElementById('setlist-modal');
+            const input = document.getElementById('setlist-modal-input');
+            document.getElementById('setlist-modal-title').textContent = title;
+            input.value = defaultValue || '';
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 30);
+
+            const btnOk = document.getElementById('setlist-modal-ok');
+            const btnCancel = document.getElementById('setlist-modal-cancel');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                btnOk.onclick = null;
+                btnCancel.onclick = null;
+                input.onkeydown = null;
+            };
+
+            const submit = () => {
+                const val = input.value.trim();
+                if (!val) return;
+                cleanup();
+                onSave(val);
+            };
+
+            btnCancel.onclick = cleanup;
+            btnOk.onclick = submit;
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') submit();
+                else if (e.key === 'Escape') cleanup();
+            };
+        }
+
         // ==========================================
         // 4. Canvas セットアップ & 座標変換
         // ==========================================
@@ -959,11 +1141,13 @@
 
         function resizeCanvas() {
             const rect = container.getBoundingClientRect();
+            const w = Math.max(1, Math.floor(rect.width));
+            const h = Math.max(1, Math.floor(rect.height));
             const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            canvas.style.width = `${rect.width}px`;
-            canvas.style.height = `${rect.height}px`;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             render();
         }
@@ -989,6 +1173,7 @@
         }
 
         function fitGraphToScreen() {
+            sanitizeGraphCoordinates();
             if (state.nodes.length === 0) {
                 state.camera = { x: 0, y: 0, zoom: 1 };
                 updateZoomLabel();
@@ -1009,7 +1194,7 @@
             const graphH = Math.max(maxY - minY, 200);
             const scaleX = (rect.width - padding * 2) / graphW;
             const scaleY = (rect.height - padding * 2) / graphH;
-            const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.35), 1.35);
+            const zoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.15), 1.35);
 
             const centerX = (minX + maxX) / 2;
             const centerY = (minY + maxY) / 2;
@@ -1036,13 +1221,16 @@
             render();
         }
 
+        function focusCameraOnNode(node) {
+            if (!node) return;
+            state.camera.x = -node.x * state.camera.zoom;
+            state.camera.y = -node.y * state.camera.zoom;
+            render();
+        }
+
         // ==========================================
         // 5. 幾何計算（ベジェ曲線・矩形交点・ヒットテスト）
         // ==========================================
-
-        /**
-         * 双方向エッジが存在する場合に曲線を左右にずらすためのオフセット量を算出
-         */
         function getEdgeCurveOffset(edge) {
             const hasReverse = state.edges.some(
                 e => e.id !== edge.id && e.source === edge.target && e.target === edge.source
@@ -1062,9 +1250,6 @@
             return offset;
         }
 
-        /**
-         * 二次ベジェ曲線の制御点・始点・終点（ノード矩形外周との交点）を計算
-         */
         function computeEdgeGeometry(edge) {
             const src = state.nodes.find(n => n.id === edge.source);
             const tgt = state.nodes.find(n => n.id === edge.target);
@@ -1080,8 +1265,10 @@
             const midX = (src.x + tgt.x) / 2 + nx * curveOffset;
             const midY = (src.y + tgt.y) / 2 + ny * curveOffset;
 
-            const start = clipLineToRect(src.x, src.y, midX, midY, NODE_WIDTH + 6, NODE_HEIGHT + 6);
-            const end = clipLineToRect(tgt.x, tgt.y, midX, midY, NODE_WIDTH + 10, NODE_HEIGHT + 10);
+            const srcScale = getNodeDepthMetrics(src).scale;
+            const tgtScale = getNodeDepthMetrics(tgt).scale;
+            const start = clipLineToRect(src.x, src.y, midX, midY, NODE_WIDTH * srcScale + 6, NODE_HEIGHT * srcScale + 6);
+            const end = clipLineToRect(tgt.x, tgt.y, midX, midY, NODE_WIDTH * tgtScale + 10, NODE_HEIGHT * tgtScale + 10);
 
             const labelX = 0.25 * start.x + 0.5 * midX + 0.25 * end.x;
             const labelY = 0.25 * start.y + 0.5 * midY + 0.25 * end.y;
@@ -1107,13 +1294,19 @@
         }
 
         function getNodeAt(wx, wy) {
-            for (let i = state.nodes.length - 1; i >= 0; i--) {
-                const n = state.nodes[i];
+            const ordered = state.sphereMode
+                ? [...state.nodes].sort((a, b) => (a.z || 0) - (b.z || 0))
+                : state.nodes;
+            for (let i = ordered.length - 1; i >= 0; i--) {
+                const n = ordered[i];
+                const sc = getNodeDepthMetrics(n).scale;
+                const hw = (NODE_WIDTH * sc) / 2;
+                const hh = (NODE_HEIGHT * sc) / 2;
                 if (
-                    wx >= n.x - NODE_WIDTH / 2 &&
-                    wx <= n.x + NODE_WIDTH / 2 &&
-                    wy >= n.y - NODE_HEIGHT / 2 &&
-                    wy <= n.y + NODE_HEIGHT / 2
+                    wx >= n.x - hw &&
+                    wx <= n.x + hw &&
+                    wy >= n.y - hh &&
+                    wy <= n.y + hh
                 ) {
                     return n;
                 }
@@ -1163,7 +1356,6 @@
             ctx.closePath();
         }
 
-        // 検索・ジャンルフィルターマッチ判定（スペース区切りAND検索対応）
         function isNodeMatched(node) {
             if (state.selectedGenreFilter) {
                 const nodeGenre = (node.genre || '').trim();
@@ -1213,37 +1405,32 @@
             badge.classList.remove('hidden');
         }
 
-        // フォーカスモード＆セトリ強調時の関連性判定
         function getFocusVisibility() {
             const hasTextSearch = state.searchQuery.trim().length > 0;
             const hasSearch = hasTextSearch || state.selectedGenreFilter !== '';
+            const activeTracks = Array.isArray(getActiveSetlistTracks()) ? getActiveSetlistTracks() : [];
+            const useSetlistHighlight = state.setlistMode && activeTracks.length > 0 && !hasSearch;
             const activeNodeId = state.selectedNodeId;
-
-            // セトリ強調モード（ルート記録ドロワー表示中 かつ 強調ON かつ 1曲以上登録済み）
-            const useSetlistHighlight = state.setlistMode && state.setlistHighlight && state.setlist.length > 0 && !hasSearch;
-            const setlistNodeSet = new Set();
-            const setlistEdgeSet = new Set();
-
-            if (useSetlistHighlight) {
-                state.setlist.forEach(id => setlistNodeSet.add(id));
-                for (let i = 0; i < state.setlist.length - 1; i++) {
-                    const srcId = state.setlist[i];
-                    const tgtId = state.setlist[i + 1];
-                    state.edges.forEach(e => {
-                        if (e.source === srcId && e.target === tgtId) {
-                            setlistEdgeSet.add(e.id);
-                        }
-                    });
-                }
-            }
-
-            // 検索中・セトリ強調中はフォーカスモードの暗転を一時解除
             const useFocus = state.focusMode && activeNodeId !== null && !hasSearch && !useSetlistHighlight;
 
             const highlightedNodes = new Set();
             const highlightedEdges = new Set();
+            const setlistNodeSet = new Set(activeTracks);
+            const setlistEdgePairSet = new Set();
 
-            if (useFocus) {
+            if (useSetlistHighlight) {
+                activeTracks.forEach((id, idx) => {
+                    highlightedNodes.add(id);
+                    if (idx > 0) {
+                        setlistEdgePairSet.add(`${activeTracks[idx - 1]}->${id}`);
+                    }
+                });
+                state.edges.forEach(e => {
+                    if (setlistEdgePairSet.has(`${e.source}->${e.target}`)) {
+                        highlightedEdges.add(e.id);
+                    }
+                });
+            } else if (useFocus) {
                 highlightedNodes.add(activeNodeId);
                 state.edges.forEach(e => {
                     if (e.source === activeNodeId || e.target === activeNodeId) {
@@ -1257,12 +1444,12 @@
             return {
                 hasTextSearch,
                 hasSearch,
-                useFocus,
-                highlightedNodes,
-                highlightedEdges,
                 useSetlistHighlight,
                 setlistNodeSet,
-                setlistEdgeSet
+                setlistEdgePairSet,
+                useFocus,
+                highlightedNodes,
+                highlightedEdges
             };
         }
 
@@ -1281,29 +1468,101 @@
             }
         }
 
+        function drawSphereWireframe() {
+            const maxR = Math.max(280, state.sphereMaxRadius || 480);
+            const shells = [maxR * 0.45, maxR * 0.85];
+            const yaw = state.sphereRot.yaw;
+            const pitch = state.sphereRot.pitch;
+
+            ctx.save();
+            // 中心核（重力原点）のマーカー
+            ctx.fillStyle = 'rgba(245, 158, 11, 0.35)';
+            ctx.beginPath();
+            ctx.arc(0, 0, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.25)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(0, 0, 16, 0, Math.PI * 2);
+            ctx.stroke();
+
+            shells.forEach((shellR, sIdx) => {
+                ctx.strokeStyle = sIdx === 0 ? 'rgba(6, 182, 212, 0.10)' : 'rgba(139, 92, 246, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 6]);
+
+                // 赤道・緯線リング（phi = -30°, 0°, +30°）
+                [-Math.PI / 6, 0, Math.PI / 6].forEach(phi => {
+                    ctx.beginPath();
+                    const steps = 48;
+                    for (let i = 0; i <= steps; i++) {
+                        const theta = (i / steps) * Math.PI * 2;
+                        const c3 = sphericalToCartesian3D(shellR, theta, phi);
+                        const rot = rotate3DPoint(c3.x3, c3.y3, c3.z3, yaw, pitch);
+                        if (i === 0) ctx.moveTo(rot.x, rot.y);
+                        else ctx.lineTo(rot.x, rot.y);
+                    }
+                    ctx.stroke();
+                });
+
+                // 経線リング（theta = 0°, 60°, 120°）
+                if (sIdx === 1) {
+                    [0, Math.PI / 3, (2 * Math.PI) / 3].forEach(baseTheta => {
+                        ctx.beginPath();
+                        const steps = 48;
+                        for (let i = 0; i <= steps; i++) {
+                            const angle = (i / steps) * Math.PI * 2;
+                            const x3 = shellR * Math.cos(angle) * Math.cos(baseTheta);
+                            const y3 = shellR * Math.sin(angle);
+                            const z3 = shellR * Math.cos(angle) * Math.sin(baseTheta);
+                            const rot = rotate3DPoint(x3, y3, z3, yaw, pitch);
+                            if (i === 0) ctx.moveTo(rot.x, rot.y);
+                            else ctx.lineTo(rot.x, rot.y);
+                        }
+                        ctx.stroke();
+                    });
+                }
+            });
+
+            ctx.restore();
+        }
+
         function render() {
+            sanitizeGraphCoordinates();
             const rect = container.getBoundingClientRect();
-            const width = rect.width;
-            const height = rect.height;
+            const width = Math.max(1, Math.floor(rect.width));
+            const height = Math.max(1, Math.floor(rect.height));
+            const dpr = window.devicePixelRatio || 1;
 
+            if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                canvas.style.width = `${width}px`;
+                canvas.style.height = `${height}px`;
+            }
+
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, width, height);
-
-            // 背景ドットグリッド
             drawGrid(width, height);
 
             ctx.save();
             ctx.translate(width / 2 + state.camera.x, height / 2 + state.camera.y);
             ctx.scale(state.camera.zoom, state.camera.zoom);
 
+            // 擬似3D球座標モード時の球殻ワイヤーフレームガイド描画
+            if (state.sphereMode) {
+                drawSphereWireframe();
+            }
+
             const {
                 hasTextSearch,
                 hasSearch,
-                useFocus,
-                highlightedNodes,
-                highlightedEdges,
                 useSetlistHighlight,
                 setlistNodeSet,
-                setlistEdgeSet
+                setlistEdgePairSet,
+                useFocus,
+                highlightedNodes,
+                highlightedEdges
             } = getFocusVisibility();
 
             // 1. エッジ（つなぎ矢印）描画
@@ -1315,17 +1574,23 @@
                 const isHovered = edge.id === state.hoveredEdgeId;
                 const isOutOfSelected = state.selectedNodeId && edge.source === state.selectedNodeId;
                 const edgeSearchHit = hasTextSearch && isEdgeMatched(edge);
-                const isSetlistEdge = useSetlistHighlight && setlistEdgeSet.has(edge.id);
+                const isSetlistEdge = useSetlistHighlight && setlistEdgePairSet.has(`${edge.source}->${edge.target}`);
 
-                let alpha = 0.85;
-                if (useSetlistHighlight && !isSetlistEdge && !isSelected) {
-                    alpha = 0.14;
+                const srcNodeObj = state.nodes.find(n => n.id === edge.source);
+                const tgtNodeObj = state.nodes.find(n => n.id === edge.target);
+                const avgEdgeDepthAlpha = (state.sphereMode && srcNodeObj && tgtNodeObj)
+                    ? (getNodeDepthMetrics(srcNodeObj).alphaFactor + getNodeDepthMetrics(tgtNodeObj).alphaFactor) * 0.5
+                    : 1;
+
+                let alpha = 0.85 * avgEdgeDepthAlpha;
+                if (useSetlistHighlight) {
+                    alpha = isSetlistEdge || isSelected ? 1.0 : 0.12;
                 } else if (useFocus && !highlightedEdges.has(edge.id) && !isSelected) {
-                    alpha = 0.14;
+                    alpha = 0.12;
                 } else if (hasSearch) {
-                    const srcMatch = isNodeMatched(state.nodes.find(n => n.id === edge.source) || { title: '' });
-                    const tgtMatch = isNodeMatched(state.nodes.find(n => n.id === edge.target) || { title: '' });
-                    if (!srcMatch && !tgtMatch && !edgeSearchHit) alpha = 0.16;
+                    const srcMatch = isNodeMatched(srcNodeObj || { title: '' });
+                    const tgtMatch = isNodeMatched(tgtNodeObj || { title: '' });
+                    if (!srcMatch && !tgtMatch && !edgeSearchHit) alpha = 0.14;
                 }
 
                 ctx.save();
@@ -1350,16 +1615,14 @@
                     ctx.shadowBlur = 12;
                 }
 
-                // ベジェ曲線本体
                 ctx.beginPath();
                 ctx.moveTo(geom.start.x, geom.start.y);
                 ctx.quadraticCurveTo(geom.control.x, geom.control.y, geom.end.x, geom.end.y);
                 ctx.stroke();
 
-                // 矢印ヘッド
                 ctx.setLineDash([]);
                 const angle = Math.atan2(geom.end.y - geom.control.y, geom.end.x - geom.control.x);
-                const headLen = isSelected || isHovered || edgeSearchHit ? 12 : 10;
+                const headLen = isSelected || isHovered || edgeSearchHit || isSetlistEdge ? 12 : 10;
                 ctx.fillStyle = strokeColor;
                 ctx.beginPath();
                 ctx.moveTo(geom.end.x, geom.end.y);
@@ -1376,7 +1639,6 @@
 
                 ctx.shadowBlur = 0;
 
-                // エッジラベルバッジ描画
                 const labelText = (edge.label || '').trim();
                 const stars = edge.rating ? `★${edge.rating}` : '';
                 const fullText = [labelText, stars].filter(Boolean).join(' ');
@@ -1426,39 +1688,54 @@
                 }
             }
 
-            // 3. ノード（楽曲カード）描画
-            state.nodes.forEach(node => {
+            // 3. ノード（楽曲カード）描画（球座標モード時は奥から手前へZソート＆遠近スケール適用）
+            const activeTracks = Array.isArray(getActiveSetlistTracks()) ? getActiveSetlistTracks() : [];
+            const renderNodes = state.sphereMode
+                ? [...state.nodes].sort((a, b) => (a.z || 0) - (b.z || 0))
+                : state.nodes;
+
+            renderNodes.forEach(node => {
                 const isSelected = node.id === state.selectedNodeId;
                 const isHovered = node.id === state.hoveredNodeId;
                 const isConnectSource = node.id === state.connectSourceId;
-                const setlistIndices = [];
-                state.setlist.forEach((id, i) => {
-                    if (id === node.id) setlistIndices.push(i + 1);
-                });
-                const isSetlistMember = useSetlistHighlight && setlistNodeSet.has(node.id);
+                const setlistIndex = activeTracks.indexOf(node.id);
+                const isInActiveSetlist = useSetlistHighlight && setlistNodeSet.has(node.id);
                 const isSearchHighlight = hasSearch && isNodeMatched(node);
+                const isPinnedDrag = state.realtimeGravity && state.isDraggingNode && state.dragNodeId === node.id;
+                const depth = getNodeDepthMetrics(node);
 
                 let alpha = 1;
-                if (useSetlistHighlight && !isSetlistMember && !isSelected) {
-                    alpha = 0.18;
+                if (useSetlistHighlight && !isInActiveSetlist && !isSelected) {
+                    alpha = 0.16 * (state.sphereMode ? (0.5 + 0.5 * depth.alphaFactor) : 1);
                 } else if (useFocus && !highlightedNodes.has(node.id)) {
-                    alpha = 0.22;
+                    alpha = 0.18 * (state.sphereMode ? (0.5 + 0.5 * depth.alphaFactor) : 1);
                 } else if (hasSearch && !isSearchHighlight) {
-                    alpha = 0.16;
+                    alpha = 0.14;
+                } else if (!isSelected && !isHovered && !isSearchHighlight && !isInActiveSetlist) {
+                    alpha *= depth.alphaFactor;
+                } else if (state.sphereMode && !isSelected && !isHovered) {
+                    // フォーカス中の隣接ノードでも奥行き感を残す
+                    alpha *= (0.45 + 0.55 * depth.alphaFactor);
                 }
 
                 ctx.save();
                 ctx.globalAlpha = alpha;
+                ctx.translate(node.x, node.y);
+                if (depth.scale !== 1) {
+                    ctx.scale(depth.scale, depth.scale);
+                }
 
-                const x = node.x - NODE_WIDTH / 2;
-                const y = node.y - NODE_HEIGHT / 2;
+                const x = -NODE_WIDTH / 2;
+                const y = -NODE_HEIGHT / 2;
                 const accentColor = node.color || '#06b6d4';
 
-                // 選択/セトリ強調/検索ヒット/ホバー時の外周グロー
                 if (isSelected || isConnectSource) {
                     ctx.shadowColor = isConnectSource ? '#ec4899' : accentColor;
                     ctx.shadowBlur = 18;
-                } else if (isSetlistMember) {
+                } else if (isPinnedDrag) {
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 20;
+                } else if (isInActiveSetlist) {
                     ctx.shadowColor = '#10b981';
                     ctx.shadowBlur = 20;
                 } else if (isSearchHighlight) {
@@ -1469,21 +1746,26 @@
                     ctx.shadowBlur = 12;
                 }
 
-                // カード本体背景
                 roundRectPath(ctx, x, y, NODE_WIDTH, NODE_HEIGHT, NODE_RADIUS);
-                ctx.fillStyle = isSelected ? '#1e2336' : (isSetlistMember ? '#142926' : (isSearchHighlight ? '#182234' : '#151824'));
+                ctx.fillStyle = isSelected
+                    ? '#1e2336'
+                    : (isInActiveSetlist ? '#142623' : (isSearchHighlight ? '#182234' : '#151824'));
                 ctx.fill();
 
                 ctx.shadowBlur = 0;
 
-                // 枠線
-                ctx.lineWidth = isSelected || isConnectSource || isSearchHighlight || isSetlistMember ? 2.2 : 1.2;
+                ctx.lineWidth = isSelected || isConnectSource || isSearchHighlight || isInActiveSetlist || isPinnedDrag ? 2.2 : 1.2;
                 ctx.strokeStyle = isConnectSource
                     ? '#ec4899'
-                    : (isSelected ? '#ffffff' : (isSetlistMember ? '#10b981' : (isSearchHighlight ? '#22d3ee' : (isHovered ? accentColor : '#2a2f45'))));
+                    : (isPinnedDrag
+                        ? '#f59e0b'
+                        : (isSelected
+                            ? '#ffffff'
+                            : (isInActiveSetlist
+                                ? '#10b981'
+                                : (isSearchHighlight ? '#22d3ee' : (isHovered ? accentColor : '#2a2f45')))));
                 ctx.stroke();
 
-                // 左端カラーアクセントバー
                 ctx.save();
                 roundRectPath(ctx, x, y, NODE_WIDTH, NODE_HEIGHT, NODE_RADIUS);
                 ctx.clip();
@@ -1491,13 +1773,12 @@
                 ctx.fillRect(x, y, 5, NODE_HEIGHT);
                 ctx.restore();
 
-                // 曲名（1行省略付き）
                 ctx.fillStyle = '#ffffff';
                 ctx.font = '600 12.5px Inter, sans-serif';
                 ctx.textAlign = 'left';
                 ctx.textBaseline = 'top';
                 const maxTextW = NODE_WIDTH - 24;
-                let titleText = node.title || 'Untitled';
+                let titleText = String(node.title ?? 'Untitled') || 'Untitled';
                 if (ctx.measureText(titleText).width > maxTextW) {
                     while (titleText.length > 0 && ctx.measureText(titleText + '…').width > maxTextW) {
                         titleText = titleText.slice(0, -1);
@@ -1506,10 +1787,9 @@
                 }
                 ctx.fillText(titleText, x + 14, y + 11);
 
-                // アーティスト名
                 ctx.fillStyle = '#94a3b8';
                 ctx.font = '400 10.5px Inter, sans-serif';
-                let artistText = node.artist || 'Unknown Artist';
+                let artistText = String(node.artist ?? 'Unknown Artist') || 'Unknown Artist';
                 if (ctx.measureText(artistText).width > maxTextW) {
                     while (artistText.length > 0 && ctx.measureText(artistText + '…').width > maxTextW) {
                         artistText = artistText.slice(0, -1);
@@ -1518,7 +1798,6 @@
                 }
                 ctx.fillText(artistText, x + 14, y + 28);
 
-                // 下部メタバッジ（BPM & キー & ジャンル）
                 const bpmText = `${node.bpm || '---'} BPM`;
                 ctx.font = '700 10px "JetBrains Mono", monospace';
                 const bpmW = ctx.measureText(bpmText).width + 10;
@@ -1530,8 +1809,8 @@
 
                 let cursorX = x + 14 + bpmW + 5;
 
-                if (node.key) {
-                    const keyText = node.key;
+                if (node.key !== undefined && node.key !== null && String(node.key).trim() !== '') {
+                    const keyText = String(node.key);
                     const keyW = ctx.measureText(keyText).width + 10;
                     roundRectPath(ctx, cursorX, y + 47, keyW, 17, 4);
                     ctx.fillStyle = `${accentColor}26`;
@@ -1541,10 +1820,9 @@
                     cursorX += keyW + 5;
                 }
 
-                // ジャンルピルバッジ表示
-                if (node.genre && node.genre.trim()) {
+                if (node.genre !== undefined && node.genre !== null && String(node.genre).trim() !== '') {
                     ctx.font = '600 9.5px Inter, sans-serif';
-                    let genreText = node.genre.trim();
+                    let genreText = String(node.genre).trim();
                     const maxGenreW = (x + NODE_WIDTH - 18) - cursorX;
                     if (maxGenreW > 24) {
                         if (ctx.measureText(genreText).width + 10 > maxGenreW) {
@@ -1565,34 +1843,30 @@
                     }
                 }
 
-                // メモ存在インジケーター（右下小さなアイコン点）
-                if (node.memo && node.memo.trim()) {
+                if (node.memo !== undefined && node.memo !== null && String(node.memo).trim() !== '') {
                     ctx.fillStyle = accentColor;
                     ctx.beginPath();
                     ctx.arc(x + NODE_WIDTH - 12, y + NODE_HEIGHT - 12, 3, 0, Math.PI * 2);
                     ctx.fill();
                 }
 
-                // セットリスト順番バッジ（ルート記録モード時）
-                if (state.setlistMode && setlistIndices.length > 0) {
-                    const orderText = setlistIndices.join(',');
-                    ctx.font = '700 10px "JetBrains Mono", monospace';
-                    const badgeW = Math.max(22, ctx.measureText(orderText).width + 10);
-                    const badgeH = 20;
-                    const bx = x + NODE_WIDTH - badgeW + 6;
-                    const by = y - 6;
-
-                    roundRectPath(ctx, bx, by, badgeW, badgeH, 10);
+                if (state.setlistMode && setlistIndex !== -1) {
+                    const badgeR = 11;
+                    const bx = x + NODE_WIDTH - 4;
+                    const by = y + 4;
                     ctx.fillStyle = '#10b981';
+                    ctx.beginPath();
+                    ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.strokeStyle = '#090a0f';
                     ctx.lineWidth = 2;
                     ctx.stroke();
 
                     ctx.fillStyle = '#090a0f';
+                    ctx.font = '700 10px "JetBrains Mono", monospace';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(orderText, bx + badgeW / 2, by + badgeH / 2 + 0.5);
+                    ctx.fillText(String(setlistIndex + 1), bx, by + 0.5);
                 }
 
                 ctx.restore();
@@ -1632,9 +1906,8 @@
             state.nodes = state.nodes.filter(n => n.id !== nodeId);
             state.edges = state.edges.filter(e => e.source !== nodeId && e.target !== nodeId);
             state.setlists.forEach(sl => {
-                sl.trackIds = sl.trackIds.filter(id => id !== nodeId);
+                sl.tracks = sl.tracks.filter(id => id !== nodeId);
             });
-            syncActiveSetlistArray();
             if (state.selectedNodeId === nodeId) state.selectedNodeId = null;
             updateGenreFilterOptions();
             updateSearchCountBadge();
@@ -1692,12 +1965,12 @@
         }
 
         // ==========================================
-        // 8. 選択 & 左右サイドバー・インスペクターUI同期
+        // 8. 選択 & 左右サイドバーUI同期
         // ==========================================
         function selectNode(nodeId) {
             state.selectedNodeId = nodeId;
             state.selectedEdgeId = null;
-            if (state.setlistMode && nodeId) {
+            if (state.setlistMode && state.setlistRecordEnabled && nodeId) {
                 appendToSetlist(nodeId);
             }
             updateInspector();
@@ -1767,11 +2040,8 @@
         }
 
         function toggleLeftSidebar() {
-            if (isLeftSidebarOpen()) {
-                closeLeftSidebar();
-            } else {
-                openLeftSidebar();
-            }
+            if (isLeftSidebarOpen()) closeLeftSidebar();
+            else openLeftSidebar();
         }
 
         function updateTransitionListUI() {
@@ -1929,11 +2199,8 @@
         }
 
         function toggleSidebar() {
-            if (isSidebarOpen()) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
+            if (isSidebarOpen()) closeSidebar();
+            else openSidebar();
         }
 
         function updateInspector() {
@@ -2129,116 +2396,52 @@
         }
 
         // ==========================================
-        // 9. セットリスト（複数セトリ管理・ルート構築 & BPMチャート）
+        // 9. セットリスト管理・選択・強調 & BPMチャート
         // ==========================================
-        function openSetlistNameModal(title, initialValue, onSave) {
-            const modal = document.getElementById('setlist-name-modal');
-            const titleEl = document.getElementById('setlist-modal-title').querySelector('span');
-            const inputEl = document.getElementById('setlist-name-input');
-            const btnOk = document.getElementById('setlist-modal-ok');
-            const btnCancel = document.getElementById('setlist-modal-cancel');
-
-            titleEl.textContent = title;
-            inputEl.value = initialValue || '';
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                inputEl.focus();
-                inputEl.select();
-            }, 30);
-
-            const cleanup = () => {
-                modal.classList.add('hidden');
-                btnOk.onclick = null;
-                btnCancel.onclick = null;
-                inputEl.onkeydown = null;
-            };
-
-            const submit = () => {
-                const name = inputEl.value.trim();
-                if (!name) {
-                    showToast('セトリ名を入力してください');
-                    return;
-                }
-                cleanup();
-                onSave(name);
-            };
-
-            btnCancel.onclick = cleanup;
-            btnOk.onclick = submit;
-            inputEl.onkeydown = (e) => {
-                if (e.key === 'Enter') submit();
-                else if (e.key === 'Escape') cleanup();
-            };
-        }
-
-        function createNewSetlist(name) {
-            const newSet = {
-                id: generateId('sl'),
-                name,
-                trackIds: []
-            };
-            state.setlists.push(newSet);
-            state.activeSetlistId = newSet.id;
-            syncActiveSetlistArray();
-            saveToStorage();
-            updateSetlistUI();
-            render();
-            showToast(`セトリ「${name}」を作成しました`);
-        }
-
-        function selectSetlist(setlistId) {
-            state.activeSetlistId = setlistId;
-            syncActiveSetlistArray();
-            saveToStorage();
-            updateSetlistUI();
-            render();
-        }
-
         function appendToSetlist(nodeId) {
-            ensureDefaultSetlist();
-            const active = getActiveSetlist();
-            if (!active) return;
-            if (active.trackIds[active.trackIds.length - 1] === nodeId) return;
-            active.trackIds.push(nodeId);
-            syncActiveSetlistArray();
+            const sl = getActiveSetlist();
+            if (!sl) return;
+            if (sl.tracks[sl.tracks.length - 1] === nodeId) return;
+            sl.tracks.push(nodeId);
             saveToStorage();
             updateSetlistUI();
             render();
-        }
-
-        function syncSetlistHighlightButton() {
-            const btn = document.getElementById('btn-toggle-setlist-highlight');
-            if (!btn) return;
-            if (state.setlistHighlight) {
-                btn.classList.add('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
-                btn.classList.remove('bg-dj-surface', 'text-slate-400', 'border-dj-border');
-            } else {
-                btn.classList.remove('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
-                btn.classList.add('bg-dj-surface', 'text-slate-400', 'border-dj-border');
-            }
         }
 
         function updateSetlistUI() {
-            ensureDefaultSetlist();
-            const selector = document.getElementById('setlist-selector');
             const listContainer = document.getElementById('setlist-items');
             const countBadge = document.getElementById('setlist-count');
             const chartContainer = document.getElementById('bpm-chart-container');
+            const selectEl = document.getElementById('setlist-select');
+            const recordChk = document.getElementById('chk-setlist-record');
 
-            if (selector) {
-                selector.innerHTML = '';
+            if (recordChk) {
+                recordChk.checked = state.setlistRecordEnabled;
+            }
+
+            if (!Array.isArray(state.setlists) || state.setlists.length === 0) {
+                state.setlists = [{ id: 'sl_default', name: 'セトリ #1', tracks: [] }];
+                state.activeSetlistId = 'sl_default';
+            }
+            state.setlists.forEach(sl => {
+                if (!Array.isArray(sl.tracks)) sl.tracks = [];
+            });
+
+            if (selectEl) {
+                selectEl.innerHTML = '';
                 state.setlists.forEach(sl => {
                     const opt = document.createElement('option');
                     opt.value = sl.id;
-                    opt.textContent = `${sl.name} (${sl.trackIds.length}曲)`;
+                    const tList = Array.isArray(sl.tracks) ? sl.tracks : [];
+                    opt.textContent = `${sl.name || 'セトリ'} (${tList.length}曲)`;
                     if (sl.id === state.activeSetlistId) opt.selected = true;
-                    selector.appendChild(opt);
+                    selectEl.appendChild(opt);
                 });
             }
 
-            syncSetlistHighlightButton();
-
-            const validTracks = state.setlist
+            const activeSl = getActiveSetlist();
+            const trackIds = activeSl ? activeSl.tracks : [];
+            const validTracks = trackIds
                 .map(id => state.nodes.find(n => n.id === id))
                 .filter(Boolean);
 
@@ -2246,7 +2449,7 @@
             listContainer.innerHTML = '';
 
             if (validTracks.length === 0) {
-                chartContainer.innerHTML = '<span class="text-[10px] text-slate-500">キャンバスの曲をクリックしてこのセトリに追加...</span>';
+                chartContainer.innerHTML = '<span class="text-[10px] text-slate-500">曲をクリックして選択中のセトリに追加...</span>';
                 return;
             }
 
@@ -2304,15 +2507,13 @@
                     </div>
                     <div class="flex items-center gap-2 shrink-0 ml-1">
                         <span class="font-mono text-[10px] text-slate-400">${t.bpm || '---'} / ${escapeHtml(t.key || '-')}</span>
-                        <button data-idx="${idx}" class="btn-remove-setlist text-slate-500 hover:text-red-400 p-0.5" title="リストから外す">
+                        <button data-idx="${idx}" class="btn-remove-setlist text-slate-500 hover:text-red-400 p-0.5">
                             <i data-lucide="x" class="w-3 h-3"></i>
                         </button>
                     </div>
                 `;
                 row.onclick = () => {
-                    state.camera.x = -t.x * state.camera.zoom;
-                    state.camera.y = -t.y * state.camera.zoom;
-                    render();
+                    focusCameraOnNode(t);
                 };
                 listContainer.appendChild(row);
             });
@@ -2320,12 +2521,10 @@
             listContainer.querySelectorAll('.btn-remove-setlist').forEach(btn => {
                 btn.onclick = (e) => {
                     e.stopPropagation();
+                    const sl = getActiveSetlist();
+                    if (!sl) return;
                     const idx = Number(btn.dataset.idx);
-                    const active = getActiveSetlist();
-                    if (active) {
-                        active.trackIds.splice(idx, 1);
-                        syncActiveSetlistArray();
-                    }
+                    sl.tracks.splice(idx, 1);
                     saveToStorage();
                     updateSetlistUI();
                     render();
@@ -2389,8 +2588,20 @@
             }
 
             const hitEdge = getEdgeAt(world.x, world.y);
-            if (hitEdge) {
+            if (hitEdge && e.button !== 2 && !e.altKey) {
                 selectEdge(hitEdge.id);
+                return;
+            }
+
+            if (state.sphereMode && (e.altKey || e.button === 2 || state.sphereOrbitMode)) {
+                state.isRotatingSphere = true;
+                state.rotateStart = {
+                    x: sx,
+                    y: sy,
+                    yaw: state.sphereRot.yaw,
+                    pitch: state.sphereRot.pitch
+                };
+                canvas.style.cursor = 'grabbing';
                 return;
             }
 
@@ -2418,11 +2629,33 @@
                 return;
             }
 
+            if (state.isRotatingSphere) {
+                const dx = sx - state.rotateStart.x;
+                const dy = sy - state.rotateStart.y;
+                state.sphereRot.yaw = state.rotateStart.yaw + dx * 0.0075;
+                state.sphereRot.pitch = Math.max(
+                    -Math.PI / 2 + 0.08,
+                    Math.min(Math.PI / 2 - 0.08, state.rotateStart.pitch + dy * 0.0075)
+                );
+                projectAllSphereNodes();
+                render();
+                return;
+            }
+
             if (state.isDraggingNode && state.dragNodeId) {
                 const node = state.nodes.find(n => n.id === state.dragNodeId);
                 if (node) {
                     node.x = Math.round(world.x - state.dragOffset.x);
                     node.y = Math.round(world.y - state.dragOffset.y);
+                    if (state.sphereMode) {
+                        const unrot = unrotate3DPoint(node.x, node.y, node.z || 0, state.sphereRot.yaw, state.sphereRot.pitch);
+                        node.x3 = unrot.x3;
+                        node.y3 = unrot.y3;
+                        node.z3 = unrot.z3;
+                        node.r = Math.hypot(unrot.x3, unrot.y3, unrot.z3);
+                        node.theta = Math.atan2(unrot.z3, unrot.x3);
+                        node.phi = node.r > 1e-4 ? Math.asin(Math.max(-1, Math.min(1, unrot.y3 / node.r))) : 0;
+                    }
                     render();
                 }
                 return;
@@ -2473,6 +2706,14 @@
                 return;
             }
 
+            if (state.isRotatingSphere) {
+                state.isRotatingSphere = false;
+                canvas.style.cursor = 'grab';
+                saveToStorage();
+                render();
+                return;
+            }
+
             if (state.isPanning) {
                 if (!state.hasMovedDuringDrag) {
                     clearSelection();
@@ -2501,7 +2742,7 @@
             const beforeWorld = screenToWorld(sx, sy);
 
             const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-            const nextZoom = Math.min(Math.max(state.camera.zoom * zoomFactor, 0.25), 2.5);
+            const nextZoom = Math.min(Math.max(state.camera.zoom * zoomFactor, 0.12), 2.5);
             state.camera.zoom = nextZoom;
 
             const afterScreen = worldToScreen(beforeWorld.x, beforeWorld.y);
@@ -2512,6 +2753,9 @@
             render();
         }, { passive: false });
 
+        canvas.addEventListener('contextmenu', (e) => {
+            if (state.sphereMode) e.preventDefault();
+        });
         canvas.addEventListener('mousedown', handlePointerDown);
         window.addEventListener('mousemove', handlePointerMove);
         window.addEventListener('mouseup', handlePointerUp);
@@ -2536,7 +2780,7 @@
                     e.touches[0].clientY - e.touches[1].clientY
                 );
                 const scale = dist / lastPinchDist;
-                state.camera.zoom = Math.min(Math.max(state.camera.zoom * scale, 0.25), 2.5);
+                state.camera.zoom = Math.min(Math.max(state.camera.zoom * scale, 0.12), 2.5);
                 lastPinchDist = dist;
                 updateZoomLabel();
                 render();
@@ -2603,8 +2847,11 @@
                 btn.classList.add('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
                 btn.classList.remove('text-slate-300', 'border-transparent');
                 drawer.classList.remove('hidden');
-                ensureDefaultSetlist();
                 updateSetlistUI();
+                const sl = getActiveSetlist();
+                if (sl && sl.tracks.length > 0) {
+                    showToast(`セトリ「${sl.name}」の曲を強調表示中`);
+                }
             } else {
                 btn.classList.remove('bg-dj-emerald/20', 'text-dj-emerald', 'border-dj-emerald/40');
                 btn.classList.add('text-slate-300', 'border-transparent');
@@ -2613,71 +2860,92 @@
             render();
         };
 
-        document.getElementById('setlist-selector').addEventListener('change', (e) => {
-            selectSetlist(e.target.value);
+        // セトリ管理コントロール
+        document.getElementById('setlist-select').addEventListener('change', (e) => {
+            state.activeSetlistId = e.target.value;
+            saveToStorage();
+            updateSetlistUI();
+            render();
+            const sl = getActiveSetlist();
+            if (sl) showToast(`セトリ「${sl.name}」を選択・強調表示`);
+        });
+
+        document.getElementById('chk-setlist-record').addEventListener('change', (e) => {
+            state.setlistRecordEnabled = e.target.checked;
         });
 
         document.getElementById('btn-new-setlist').onclick = () => {
             const defaultName = `セトリ #${state.setlists.length + 1}`;
-            openSetlistNameModal('新しいセトリを作成', defaultName, (name) => {
-                createNewSetlist(name);
+            showSetlistPrompt('新しいセトリを作成', defaultName, (name) => {
+                const newSl = {
+                    id: generateId('sl'),
+                    name,
+                    tracks: []
+                };
+                state.setlists.push(newSl);
+                state.activeSetlistId = newSl.id;
+                state.setlistRecordEnabled = true;
+                saveToStorage();
+                updateSetlistUI();
+                render();
+                showToast(`セトリ「${name}」を作成しました`);
             });
         };
 
         document.getElementById('btn-rename-setlist').onclick = () => {
-            const active = getActiveSetlist();
-            if (!active) return;
-            openSetlistNameModal('セトリ名の変更', active.name, (name) => {
-                active.name = name;
+            const sl = getActiveSetlist();
+            if (!sl) return;
+            showSetlistPrompt('セトリ名を変更', sl.name, (newName) => {
+                sl.name = newName;
                 saveToStorage();
                 updateSetlistUI();
                 showToast('セトリ名を変更しました');
             });
         };
 
-        document.getElementById('btn-toggle-setlist-highlight').onclick = () => {
-            state.setlistHighlight = !state.setlistHighlight;
-            syncSetlistHighlightButton();
-            render();
-            showToast(state.setlistHighlight ? 'セトリ強調表示 ON' : 'セトリ強調表示 OFF');
-        };
-
-        document.getElementById('btn-clear-setlist').onclick = () => {
-            const active = getActiveSetlist();
-            if (!active || active.trackIds.length === 0) return;
-            active.trackIds = [];
-            syncActiveSetlistArray();
-            saveToStorage();
-            updateSetlistUI();
-            render();
-            showToast('セトリの曲リストをクリアしました');
-        };
-
         document.getElementById('btn-delete-setlist').onclick = () => {
-            const active = getActiveSetlist();
-            if (!active) return;
-            showConfirm('セトリの削除', `セトリ「${active.name}」を削除しますか？`, () => {
-                state.setlists = state.setlists.filter(s => s.id !== active.id);
-                state.activeSetlistId = state.setlists.length > 0 ? state.setlists[0].id : null;
-                ensureDefaultSetlist();
+            const sl = getActiveSetlist();
+            if (!sl) return;
+            if (state.setlists.length <= 1) {
+                showConfirm('セトリのクリア', `最後のセトリ「${sl.name}」の曲リストを空にしますか？`, () => {
+                    sl.tracks = [];
+                    saveToStorage();
+                    updateSetlistUI();
+                    render();
+                    showToast('セトリを空にしました');
+                });
+                return;
+            }
+            showConfirm('セトリの削除', `セトリ「${sl.name}」を削除しますか？`, () => {
+                state.setlists = state.setlists.filter(item => item.id !== sl.id);
+                state.activeSetlistId = state.setlists[0].id;
                 saveToStorage();
                 updateSetlistUI();
                 render();
-                showToast('セトリを削除しました');
+                showToast(`セトリ「${sl.name}」を削除しました`);
             });
         };
 
+        document.getElementById('btn-clear-setlist').onclick = () => {
+            const sl = getActiveSetlist();
+            if (!sl) return;
+            sl.tracks = [];
+            saveToStorage();
+            updateSetlistUI();
+            render();
+        };
+
         document.getElementById('btn-copy-setlist').onclick = () => {
-            if (state.setlist.length === 0) return;
-            const active = getActiveSetlist();
-            const header = active ? `【${active.name}】\n` : '';
-            const lines = state.setlist.map((id, idx) => {
+            const sl = getActiveSetlist();
+            if (!sl || sl.tracks.length === 0) return;
+            const header = `【${sl.name}】\n`;
+            const lines = sl.tracks.map((id, idx) => {
                 const n = state.nodes.find(item => item.id === id);
                 if (!n) return '';
                 const genrePart = n.genre ? ` | ${n.genre}` : '';
                 let line = `${idx + 1}. ${n.title}${n.artist ? ' - ' + n.artist : ''} [${n.bpm || '---'} BPM / ${n.key || '-'}${genrePart}]`;
                 if (idx > 0) {
-                    const prevId = state.setlist[idx - 1];
+                    const prevId = sl.tracks[idx - 1];
                     const edge = state.edges.find(e => e.source === prevId && e.target === id);
                     if (edge && edge.label) {
                         line = `   ↳ (${edge.label})\n` + line;
@@ -2693,7 +2961,7 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                showToast('セットリストをクリップボードにコピーしました');
+                showToast('セトリをクリップボードにコピーしました');
             } catch (err) {
                 showToast('コピーに失敗しました');
             }
@@ -2712,7 +2980,6 @@
         };
         document.getElementById('btn-reset-view').onclick = fitGraphToScreen;
 
-        // ノードフォームのリアルタイム更新
         ['node-title', 'node-artist', 'node-genre', 'node-bpm', 'node-key', 'node-memo'].forEach(id => {
             document.getElementById(id).addEventListener('input', (e) => {
                 const node = state.nodes.find(n => n.id === state.selectedNodeId);
@@ -2735,7 +3002,6 @@
             deleteNode(state.selectedNodeId);
         };
 
-        // エッジフォームのリアルタイム更新
         document.getElementById('edge-label').addEventListener('input', (e) => {
             const edge = state.edges.find(item => item.id === state.selectedEdgeId);
             if (!edge) return;
@@ -2783,7 +3049,6 @@
             if (state.selectedEdgeId) deleteEdge(state.selectedEdgeId);
         };
 
-        // ジャンルフィルター連動
         function updateGenreFilterOptions() {
             const genres = Array.from(
                 new Set(
@@ -2825,7 +3090,6 @@
         document.getElementById('genre-filter').addEventListener('change', e => handleGenreFilterChange(e.target.value));
         document.getElementById('genre-filter-mobile').addEventListener('change', e => handleGenreFilterChange(e.target.value));
 
-        // 検索バー連動
         function handleSearchInput(val) {
             state.searchQuery = val;
             const inputEl = document.getElementById('search-input');
@@ -2840,7 +3104,7 @@
         document.getElementById('btn-clear-search').onclick = () => handleSearchInput('');
 
         // ==========================================
-        // 12. 自動整列レイアウト & データ管理メニュー
+        // 12. 自動整列レイアウト & リアルタイム重力シミュレーション
         // ==========================================
         const layoutMenuWrapper = document.getElementById('layout-menu-wrapper');
         const layoutMenuBtn = document.getElementById('btn-layout-menu');
@@ -2889,6 +3153,7 @@
                     layoutAnimFrame = requestAnimationFrame(step);
                 } else {
                     layoutAnimFrame = null;
+                    sanitizeGraphCoordinates();
                     saveToStorage();
                     fitGraphToScreen();
                     showToast(`${label}で整列しました`);
@@ -2898,7 +3163,10 @@
             layoutAnimFrame = requestAnimationFrame(step);
         }
 
+        // 1. BPM順（左→右）レイアウト
         function applyBpmLayout() {
+            if (state.realtimeGravity) setRealtimeGravity(false, true);
+            exitSphereMode();
             const withBpm = state.nodes.filter(n => n.bpm !== '' && !isNaN(Number(n.bpm)));
             const withoutBpm = state.nodes.filter(n => n.bpm === '' || isNaN(Number(n.bpm)));
 
@@ -2936,7 +3204,10 @@
             animateNodesToPositions(targetMap, 'BPM順（左→右）');
         }
 
+        // 2. ジャンル別クラスターレイアウト
         function applyGenreClusterLayout() {
+            if (state.realtimeGravity) setRealtimeGravity(false, true);
+            exitSphereMode();
             const groups = new Map();
             state.nodes.forEach(node => {
                 const g = (node.genre || '').trim() || '未分類 (No Genre)';
@@ -3009,11 +3280,10 @@
             animateNodesToPositions(targetMap, 'ジャンル別クラスター');
         }
 
-        /**
-         * 3. 力学モデル（フォースレイアウト）
-         * 一直線のつなぎは角度を継承して内側から外側へまっすぐ放射線状に配置
-         */
+        // 3. 力学整列（放射線・一直線継承＋矩形衝突解消）
         function applyForceLayout() {
+            if (state.realtimeGravity) setRealtimeGravity(false, true);
+            exitSphereMode();
             const count = state.nodes.length;
             if (count === 0) return;
 
@@ -3029,193 +3299,174 @@
                 }
             });
 
-            // 起点（ルート）の抽出
-            const roots = state.nodes.filter(n => inDeg.get(n.id) === 0 && outDeg.get(n.id) > 0);
-            if (roots.length === 0) {
-                const connected = state.nodes
-                    .filter(n => (inDeg.get(n.id) + outDeg.get(n.id)) > 0)
-                    .sort((a, b) => (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id)));
-                if (connected.length > 0) roots.push(connected[0]);
-            }
-
-            // BFSツリー構築と親の角度継承（一本道は角度をそのまま引き継いで一直線にする）
+            const visited = new Set();
             const depthMap = new Map();
             const angleMap = new Map();
-            const queue = [];
+            const isolatedNodes = [];
 
-            roots.forEach((r, idx) => {
-                depthMap.set(r.id, 0);
-                const rootAngle = (2 * Math.PI * idx) / Math.max(roots.length, 1) - Math.PI / 2;
-                angleMap.set(r.id, rootAngle);
-                queue.push(r.id);
-            });
-
-            while (queue.length > 0) {
-                const currId = queue.shift();
-                const d = depthMap.get(currId);
-                const baseAngle = angleMap.get(currId);
-
-                const unvisitedChildren = outAdj.get(currId).filter(nxt => !depthMap.has(nxt));
-                const childCount = unvisitedChildren.length;
-                // 子が1つだけなら角度差0で真っ直ぐ継承、複数分岐なら扇状に展開
-                const spread = childCount <= 1 ? 0 : Math.min(Math.PI * 0.65, (childCount - 1) * 0.42);
-
-                unvisitedChildren.forEach((nxtId, idx) => {
-                    depthMap.set(nxtId, d + 1);
-                    const offset = childCount <= 1 ? 0 : -spread / 2 + (spread * idx) / (childCount - 1);
-                    angleMap.set(nxtId, baseAngle + offset);
-                    queue.push(nxtId);
+            const rootCandidates = state.nodes
+                .filter(n => (inDeg.get(n.id) + outDeg.get(n.id)) > 0)
+                .sort((a, b) => {
+                    if (inDeg.get(a.id) === 0 && inDeg.get(b.id) !== 0) return -1;
+                    if (inDeg.get(b.id) === 0 && inDeg.get(a.id) !== 0) return 1;
+                    return (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id));
                 });
-            }
 
-            // 未到達ノード（循環や孤立ノード）への角度割り当て
-            const unvisitedNodes = state.nodes.filter(n => !depthMap.has(n.id));
-            unvisitedNodes.forEach((n, idx) => {
-                const isIsolated = inDeg.get(n.id) === 0 && outDeg.get(n.id) === 0;
-                depthMap.set(n.id, isIsolated ? 2 : 1);
-                angleMap.set(n.id, (2 * Math.PI * idx) / Math.max(unvisitedNodes.length, 1) + Math.PI / 4);
-            });
-
-            // 同じ深度（リング）にあるノード同士が角度的に近すぎる場合に均等分散させて毛玉化を防止
-            const depthBuckets = new Map();
             state.nodes.forEach(n => {
-                const d = depthMap.get(n.id) || 0;
-                if (!depthBuckets.has(d)) depthBuckets.set(d, []);
-                depthBuckets.get(d).push(n.id);
-            });
-
-            depthBuckets.forEach((ids, d) => {
-                if (d === 0 && ids.length <= 1) return;
-                ids.sort((a, b) => (angleMap.get(a) || 0) - (angleMap.get(b) || 0));
-                const nLen = ids.length;
-                const minAngularGap = (2 * Math.PI) / Math.max(nLen, 4);
-                for (let k = 0; k < nLen; k++) {
-                    const currAngle = angleMap.get(ids[k]);
-                    const nextIdx = (k + 1) % nLen;
-                    let nextAngle = angleMap.get(ids[nextIdx]);
-                    if (nextIdx === 0) nextAngle += 2 * Math.PI;
-                    if (nextAngle - currAngle < minAngularGap * 0.75) {
-                        const targetNext = currAngle + minAngularGap * 0.75;
-                        angleMap.set(ids[nextIdx], targetNext % (2 * Math.PI));
-                    }
+                if (inDeg.get(n.id) === 0 && outDeg.get(n.id) === 0) {
+                    isolatedNodes.push(n);
+                    visited.add(n.id);
                 }
             });
 
-            const maxDepth = Math.max(1, ...Array.from(depthMap.values()));
-            const stepRadius = 310; // カード横幅(204px)が重ならない十分な放射距離
+            const trees = [];
+            rootCandidates.forEach(rootNode => {
+                if (visited.has(rootNode.id)) return;
+                const treeNodes = [];
+                const queue = [rootNode.id];
+                visited.add(rootNode.id);
+                depthMap.set(rootNode.id, 0);
 
-            const simNodes = state.nodes.map(n => {
-                const inc = inDeg.get(n.id);
-                const out = outDeg.get(n.id);
-                const isIsolated = inc === 0 && out === 0;
-                const d = depthMap.get(n.id) || 0;
-                const targetAngle = angleMap.get(n.id) || 0;
-
-                // 同じリング内のノード数に応じて半径も自動拡張し円周上のスペースを確保
-                const ringCount = (depthBuckets.get(d) || []).length;
-                const minRingRadius = ringCount > 1 ? (ringCount * 240) / (2 * Math.PI) : 0;
-
-                let targetR = Math.max(d * stepRadius, minRingRadius);
-                if (roots.length === 1 && d === 0) {
-                    targetR = 0;
-                } else if (roots.length > 1 && d === 0) {
-                    targetR = Math.max(180, minRingRadius);
-                }
-                if (isIsolated) {
-                    const isoCount = state.nodes.filter(item => inDeg.get(item.id) === 0 && outDeg.get(item.id) === 0).length;
-                    const isoMinR = (isoCount * 240) / (2 * Math.PI);
-                    targetR = Math.max((maxDepth + 0.8) * stepRadius, isoMinR, 480);
-                }
-
-                return {
-                    id: n.id,
-                    x: Math.cos(targetAngle) * targetR,
-                    y: Math.sin(targetAngle) * targetR * 0.82,
-                    vx: 0,
-                    vy: 0,
-                    targetR,
-                    targetAngle,
-                    isRoot: d === 0,
-                    isIsolated
-                };
-            });
-
-            const iterations = 160;
-
-            for (let iter = 0; iter < iterations; iter++) {
-                const cooling = 1 - iter / iterations;
-
-                // 1. 割り当てられた放射線（角度＋半径）への復元力（一直線を維持）
-                simNodes.forEach(s => {
-                    const idealX = Math.cos(s.targetAngle) * s.targetR;
-                    const idealY = Math.sin(s.targetAngle) * s.targetR * 0.82;
-                    const pullStrength = s.isRoot ? 0.14 : 0.10;
-
-                    s.vx = (s.vx + (idealX - s.x) * pullStrength * cooling) * 0.72;
-                    s.vy = (s.vy + (idealY - s.y) * pullStrength * cooling) * 0.72;
-                    s.x += s.vx;
-                    s.y += s.vy;
-                });
-
-                // 2. カード矩形サイズ（204x72 + 余白）に基づく確実な重なり解消パス
-                const boxW = NODE_WIDTH + 36;
-                const boxH = NODE_HEIGHT + 32;
-                for (let i = 0; i < count; i++) {
-                    for (let j = i + 1; j < count; j++) {
-                        const a = simNodes[i];
-                        const b = simNodes[j];
-                        const dx = b.x - a.x;
-                        const dy = b.y - a.y;
-                        const overlapX = boxW - Math.abs(dx);
-                        const overlapY = boxH - Math.abs(dy);
-
-                        if (overlapX > 0 && overlapY > 0) {
-                            // 重なりが浅い軸方向へ押し出して確実に分離する
-                            if (overlapX < overlapY) {
-                                const push = (overlapX / 2) * 0.85;
-                                const sign = dx >= 0 ? 1 : -1;
-                                a.x -= sign * push;
-                                b.x += sign * push;
-                            } else {
-                                const push = (overlapY / 2) * 0.85;
-                                const sign = dy >= 0 ? 1 : -1;
-                                a.y -= sign * push;
-                                b.y += sign * push;
-                            }
+                while (queue.length > 0) {
+                    const curr = queue.shift();
+                    treeNodes.push(curr);
+                    const d = depthMap.get(curr);
+                    outAdj.get(curr).forEach(nxt => {
+                        if (!visited.has(nxt)) {
+                            visited.add(nxt);
+                            depthMap.set(nxt, d + 1);
+                            queue.push(nxt);
                         }
+                    });
+                }
+                trees.push({ rootId: rootNode.id, nodes: treeNodes });
+            });
+
+            const totalTreeNodes = trees.reduce((sum, t) => sum + t.nodes.length, 0);
+            let cursorAngle = -Math.PI / 2;
+
+            trees.forEach(tree => {
+                const sectorSpan = totalTreeNodes > 0
+                    ? (2 * Math.PI * tree.nodes.length) / totalTreeNodes
+                    : (2 * Math.PI) / Math.max(1, trees.length);
+                const rootAngle = cursorAngle + sectorSpan / 2;
+                cursorAngle += sectorSpan;
+
+                function assignAngles(nodeId, angle, spread) {
+                    angleMap.set(nodeId, angle);
+                    const children = outAdj.get(nodeId).filter(
+                        cid => depthMap.get(cid) === depthMap.get(nodeId) + 1
+                    );
+                    if (children.length === 0) return;
+
+                    if (children.length === 1) {
+                        // 一本道は角度を完全継承し、内側から外側へ真っ直ぐ伸ばす
+                        assignAngles(children[0], angle, spread);
+                    } else {
+                        const childSpread = spread / children.length;
+                        children.forEach((cid, idx) => {
+                            const childAngle = angle - spread / 2 + childSpread * (idx + 0.5);
+                            assignAngles(cid, childAngle, childSpread * 0.9);
+                        });
                     }
+                }
+
+                assignAngles(tree.rootId, rootAngle, Math.min(sectorSpan * 0.85, Math.PI * 1.4));
+            });
+
+            const depthBuckets = new Map();
+            let maxDepth = 0;
+            depthMap.forEach((d, id) => {
+                maxDepth = Math.max(maxDepth, d);
+                if (!depthBuckets.has(d)) depthBuckets.set(d, []);
+                depthBuckets.get(d).push(id);
+            });
+
+            const radiusByDepth = new Map();
+            let prevRadius = 0;
+            for (let d = 0; d <= maxDepth; d++) {
+                const bucket = depthBuckets.get(d) || [];
+                if (d === 0 && bucket.length === 1) {
+                    radiusByDepth.set(0, 0);
+                    prevRadius = 0;
+                } else {
+                    const minRingForCount = (bucket.length * 245) / (2 * Math.PI);
+                    const r = Math.max(prevRadius + 240, minRingForCount, 240);
+                    radiusByDepth.set(d, r);
+                    prevRadius = r;
                 }
             }
 
-            // 最終仕上げ：万が一残っている矩形重なりを完全に解消
-            const finalBoxW = NODE_WIDTH + 28;
-            const finalBoxH = NODE_HEIGHT + 24;
-            for (let pass = 0; pass < 25; pass++) {
+            const simNodes = [];
+            trees.forEach(tree => {
+                tree.nodes.forEach(id => {
+                    const d = depthMap.get(id) || 0;
+                    const angle = angleMap.get(id) ?? 0;
+                    const r = radiusByDepth.get(d) ?? 0;
+                    const tx = Math.cos(angle) * r;
+                    const ty = Math.sin(angle) * r * 0.8;
+                    simNodes.push({
+                        id,
+                        x: tx,
+                        y: ty,
+                        targetX: tx,
+                        targetY: ty,
+                        isRoot: r === 0
+                    });
+                });
+            });
+
+            if (isolatedNodes.length > 0) {
+                const outerR = Math.max(prevRadius + 250, (isolatedNodes.length * 245) / (2 * Math.PI), 320);
+                isolatedNodes.forEach((node, idx) => {
+                    const angle = -Math.PI / 2 + (2 * Math.PI * idx) / isolatedNodes.length;
+                    const tx = Math.cos(angle) * outerR * 1.1;
+                    const ty = Math.sin(angle) * outerR * 0.82;
+                    simNodes.push({
+                        id: node.id,
+                        x: tx,
+                        y: ty,
+                        targetX: tx,
+                        targetY: ty,
+                        isRoot: false
+                    });
+                });
+            }
+
+            // 矩形重なり解消パス（カード幅204 + 余白42, 高さ72 + 余白38）
+            const reqW = NODE_WIDTH + 42;
+            const reqH = NODE_HEIGHT + 38;
+            for (let pass = 0; pass < 90; pass++) {
                 let moved = false;
-                for (let i = 0; i < count; i++) {
-                    for (let j = i + 1; j < count; j++) {
+                for (let i = 0; i < simNodes.length; i++) {
+                    for (let j = i + 1; j < simNodes.length; j++) {
                         const a = simNodes[i];
                         const b = simNodes[j];
                         const dx = b.x - a.x;
                         const dy = b.y - a.y;
-                        const overlapX = finalBoxW - Math.abs(dx);
-                        const overlapY = finalBoxH - Math.abs(dy);
+                        const overlapX = reqW - Math.abs(dx);
+                        const overlapY = reqH - Math.abs(dy);
+
                         if (overlapX > 0 && overlapY > 0) {
                             moved = true;
                             if (overlapX < overlapY) {
-                                const shift = overlapX / 2 + 1;
-                                const sign = dx >= 0 ? 1 : -1;
-                                a.x -= sign * shift;
-                                b.x += sign * shift;
+                                const push = (overlapX / 2 + 1) * (dx >= 0 ? 1 : -1);
+                                if (!a.isRoot) a.x -= push;
+                                if (!b.isRoot) b.x += push;
                             } else {
-                                const shift = overlapY / 2 + 1;
-                                const sign = dy >= 0 ? 1 : -1;
-                                a.y -= sign * shift;
-                                b.y += sign * shift;
+                                const push = (overlapY / 2 + 1) * (dy >= 0 ? 1 : -1);
+                                if (!a.isRoot) a.y -= push;
+                                if (!b.isRoot) b.y += push;
                             }
                         }
                     }
                 }
+                simNodes.forEach(s => {
+                    if (!s.isRoot) {
+                        s.x += (s.targetX - s.x) * 0.08;
+                        s.y += (s.targetY - s.y) * 0.08;
+                    }
+                });
                 if (!moved) break;
             }
 
@@ -3227,101 +3478,174 @@
                 });
             });
 
-            animateNodesToPositions(targetMap, '力学整列（放射線・重なり解消）');
+            animateNodesToPositions(targetMap, '力学整列（放射線・終点外側）');
         }
 
-        /**
-         * 4. 重力整列（物理ベースの重力＋バネ力学シミュレーション）
-         * 起点（ルート）を上部に吊るし、全ノードに下向き重力(+Y)とエッジのバネ張力・反発力を与えて有機的に垂れ下がる配置を計算
-         */
-        function applyGravityLayout() {
+        // 4. 擬似3D球座標 (r, theta, phi) 重力シミュレーション
+        // 起点（入力次数0）を中心核 (r≈0) にアンカーし、外向きの動径重力 + 球面クーロン反発 + バネ張力で球殻配置する
+        const sphereVelocities = new Map();
+
+        function syncSphereModeUI() {
+            const orbitBtn = document.getElementById('btn-sphere-orbit');
+            if (!orbitBtn) return;
+            if (state.sphereMode) {
+                orbitBtn.classList.remove('hidden');
+                orbitBtn.classList.add('flex');
+                if (state.sphereOrbitMode) {
+                    orbitBtn.classList.add('bg-dj-cyan/20', 'text-dj-cyan', 'border-dj-cyan/50');
+                    orbitBtn.classList.remove('text-slate-300', 'border-transparent');
+                } else {
+                    orbitBtn.classList.remove('bg-dj-cyan/20', 'text-dj-cyan', 'border-dj-cyan/50');
+                    orbitBtn.classList.add('text-slate-300', 'border-transparent');
+                }
+            } else {
+                orbitBtn.classList.add('hidden');
+                orbitBtn.classList.remove('flex');
+            }
+        }
+
+        function exitSphereMode() {
+            state.sphereMode = false;
+            state.sphereOrbitMode = false;
+            state.nodes.forEach(n => {
+                n.z = 0;
+            });
+            syncSphereModeUI();
+        }
+
+        function stepSphericalGravityPhysics(steps = 20, coolingFactor = 1.0) {
             const count = state.nodes.length;
             if (count === 0) return;
 
             const inDeg = new Map(state.nodes.map(n => [n.id, 0]));
             const outDeg = new Map(state.nodes.map(n => [n.id, 0]));
+            const outAdj = new Map(state.nodes.map(n => [n.id, []]));
 
             state.edges.forEach(e => {
                 if (inDeg.has(e.target) && outDeg.has(e.source) && e.source !== e.target) {
                     inDeg.set(e.target, inDeg.get(e.target) + 1);
                     outDeg.set(e.source, outDeg.get(e.source) + 1);
+                    outAdj.get(e.source).push(e.target);
                 }
             });
 
-            // 起点（ルート：入次数0かつ出次数1以上）を特定
-            let roots = state.nodes.filter(n => inDeg.get(n.id) === 0 && outDeg.get(n.id) > 0);
-            if (roots.length === 0) {
-                const connected = state.nodes
-                    .filter(n => (inDeg.get(n.id) + outDeg.get(n.id)) > 0)
-                    .sort((a, b) => (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id)));
-                if (connected.length > 0) roots = [connected[0]];
-            }
-            const rootSet = new Set(roots.map(r => r.id));
+            // 起点（入力次数0）を特定して中心核アンカーにする
+            const roots = state.nodes.filter(n => inDeg.get(n.id) === 0 && outDeg.get(n.id) > 0);
+            const anchorIds = new Set(roots.map(r => r.id));
 
-            // 初期位置のセットアップ（起点は上部、その他は現在位置ベース＋微小ジッター）
-            const rootSpan = (roots.length - 1) * 280;
+            if (anchorIds.size === 0) {
+                const best = state.nodes
+                    .filter(n => outDeg.get(n.id) > 0)
+                    .sort((a, b) => (outDeg.get(b.id) - inDeg.get(b.id)) - (outDeg.get(a.id) - inDeg.get(a.id)))[0];
+                if (best) anchorIds.add(best.id);
+            }
+
+            // BFSで各ノードの最小ホップ深度を算出し、目標球殻半径 targetR を決定
+            const depthMap = new Map();
+            const queue = [];
+            anchorIds.forEach(id => {
+                depthMap.set(id, 0);
+                queue.push(id);
+            });
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                const d = depthMap.get(curr);
+                outAdj.get(curr).forEach(nxt => {
+                    if (!depthMap.has(nxt)) {
+                        depthMap.set(nxt, d + 1);
+                        queue.push(nxt);
+                    }
+                });
+            }
+
+            const maxDepth = Math.max(1, ...Array.from(depthMap.values()));
+            const baseShellStep = Math.max(210, Math.min(280, 180 + Math.sqrt(count) * 14));
+            const maxShellRadius = Math.max(360, maxDepth * baseShellStep);
+            state.sphereMaxRadius = maxShellRadius;
+
+            // フィボナッチ球面（黄金螺旋）で初期の球座標を均等割り当て
+            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
             const simNodes = state.nodes.map((n, idx) => {
+                let vel = sphereVelocities.get(n.id);
+                if (!vel) {
+                    vel = { vx: 0, vy: 0, vz: 0 };
+                    sphereVelocities.set(n.id, vel);
+                }
+
                 const inc = inDeg.get(n.id);
                 const out = outDeg.get(n.id);
-                const isRoot = rootSet.has(n.id);
                 const isIsolated = inc === 0 && out === 0;
+                const isAnchor = anchorIds.has(n.id);
+                const isPinned = state.realtimeGravity && state.isDraggingNode && state.dragNodeId === n.id;
 
-                let initX = n.x * 0.4 + ((idx % 5) - 2) * 45;
-                let initY = n.y * 0.4;
-                let anchorX = 0;
-
-                if (isRoot) {
-                    const rIdx = roots.findIndex(r => r.id === n.id);
-                    anchorX = -rootSpan / 2 + rIdx * 280;
-                    initX = anchorX;
-                    initY = -260;
+                let targetR = baseShellStep * 1.4;
+                if (isAnchor) {
+                    targetR = anchorIds.size === 1 ? 0 : 95;
                 } else if (isIsolated) {
-                    initY = 260;
+                    targetR = maxShellRadius * 1.12;
+                } else if (depthMap.has(n.id)) {
+                    const d = depthMap.get(n.id);
+                    const sinkBonus = out === 0 ? 0.35 : 0;
+                    targetR = (d + sinkBonus) * baseShellStep;
+                }
+
+                // 未初期化または平面状態なら黄金螺旋球面上に初期配置
+                if (typeof n.x3 !== 'number' || !Number.isFinite(n.x3) || !state.sphereMode) {
+                    const tNorm = count > 1 ? idx / (count - 1) : 0.5;
+                    const yUnit = 1 - tNorm * 1.85; // +0.925 〜 -0.925
+                    const phi0 = Math.asin(Math.max(-0.92, Math.min(0.92, yUnit)));
+                    const theta0 = idx * goldenAngle;
+                    const initR = Math.max(targetR, isAnchor ? 0 : 120);
+                    const c3 = sphericalToCartesian3D(initR, theta0, phi0);
+                    n.x3 = c3.x3;
+                    n.y3 = c3.y3;
+                    n.z3 = c3.z3;
                 }
 
                 return {
+                    node: n,
                     id: n.id,
-                    x: initX,
-                    y: initY,
-                    vx: 0,
-                    vy: 0,
-                    isRoot,
+                    x: n.x3,
+                    y: n.y3,
+                    z: n.z3,
+                    vx: isPinned ? 0 : vel.vx,
+                    vy: isPinned ? 0 : vel.vy,
+                    vz: isPinned ? 0 : vel.vz,
+                    targetR,
+                    isAnchor,
                     isIsolated,
-                    anchorX,
-                    degree: inc + out
+                    isPinned
                 };
             });
 
             const simMap = new Map(simNodes.map(s => [s.id, s]));
-            const iterations = 260;
-            const idealSpringLen = 210;
+            const idealSpringLen = baseShellStep * 0.95;
 
-            for (let iter = 0; iter < iterations; iter++) {
-                const cooling = 1 - iter / iterations;
-
-                // 1. ノード間のクーロン反発力（横幅の広いカードに合わせてX軸を広めに反発）
+            for (let iter = 0; iter < steps; iter++) {
+                // 1. 3D球面空間でのクーロン反発力（カード幅を考慮してXY方向をやや強めに反発）
                 for (let i = 0; i < count; i++) {
                     for (let j = i + 1; j < count; j++) {
                         const a = simNodes[i];
                         const b = simNodes[j];
                         const dx = b.x - a.x;
                         const dy = (b.y - a.y) * 1.45;
-                        const dist = Math.hypot(dx, dy) || 1;
+                        const dz = b.z - a.z;
+                        const dist = Math.hypot(dx, dy, dz) || 1;
 
-                        const minSep = 260;
-                        if (dist < minSep * 2.4) {
-                            const repulse = ((minSep * minSep) / (dist * dist)) * 16 * cooling;
-                            const fx = (dx / dist) * repulse;
-                            const fy = (dy / dist) * repulse * 0.65;
-                            a.vx -= fx;
-                            a.vy -= fy;
-                            b.vx += fx;
-                            b.vy += fy;
+                        const minSep = 250;
+                        if (dist < minSep * 2.1) {
+                            const force = ((minSep * minSep) / (dist * dist)) * 11 * coolingFactor;
+                            const fx = (dx / dist) * force;
+                            const fy = (dy / dist) * force * 0.65;
+                            const fz = (dz / dist) * force;
+                            if (!a.isPinned) { a.vx -= fx; a.vy -= fy; a.vz -= fz; }
+                            if (!b.isPinned) { b.vx += fx; b.vy += fy; b.vz += fz; }
                         }
                     }
                 }
 
-                // 2. エッジのバネ張力 ＋ 有向重力バイアス（終点側が起点側より下へ垂れ下がる力）
+                // 2. つなぎエッジのバネ張力 ＋ 外向き動径方向ガイド（子ノードが親の外側球殻へ向かう）
                 state.edges.forEach(edge => {
                     const src = simMap.get(edge.source);
                     const tgt = simMap.get(edge.target);
@@ -3329,125 +3653,201 @@
 
                     const dx = tgt.x - src.x;
                     const dy = tgt.y - src.y;
-                    const dist = Math.hypot(dx, dy) || 1;
+                    const dz = tgt.z - src.z;
+                    const dist = Math.hypot(dx, dy, dz) || 1;
                     const displacement = dist - idealSpringLen;
-                    const springForce = displacement * 0.048 * cooling;
+                    const springForce = displacement * 0.048 * coolingFactor;
 
                     const fx = (dx / dist) * springForce;
                     const fy = (dy / dist) * springForce;
+                    const fz = (dz / dist) * springForce;
+                    if (!src.isPinned) { src.vx += fx * 0.65; src.vy += fy * 0.65; src.vz += fz * 0.65; }
+                    if (!tgt.isPinned) { tgt.vx -= fx; tgt.vy -= fy; tgt.vz -= fz; }
 
-                    src.vx += fx * 0.85;
-                    src.vy += fy * 0.65;
-                    tgt.vx -= fx;
-                    tgt.vy -= fy;
-
-                    // 矢印の向き（From -> To）に沿って下向きに引っ張る力
-                    if (tgt.y < src.y + 115) {
-                        const dropForce = (src.y + 115 - tgt.y) * 0.045 * cooling;
-                        tgt.vy += dropForce;
-                        if (!src.isRoot) src.vy -= dropForce * 0.35;
+                    // 到着曲が常に親より外側の球殻へ押し出される動径バイアス
+                    const srcR = Math.hypot(src.x, src.y, src.z);
+                    const tgtR = Math.hypot(tgt.x, tgt.y, tgt.z);
+                    if (tgtR < srcR + baseShellStep * 0.65 && !tgt.isAnchor && !tgt.isPinned) {
+                        const outDirLen = tgtR || 1;
+                        const pushOut = 4.6 * coolingFactor;
+                        tgt.vx += (tgt.x / outDirLen) * pushOut;
+                        tgt.vy += (tgt.y / outDirLen) * pushOut;
+                        tgt.vz += (tgt.z / outDirLen) * pushOut;
                     }
                 });
 
-                // 3. 地球の重力（+Y方向）＆ 起点の吊り下げアンカー復元力
+                // 3. 球座標動径ポテンシャル（内から外への重力場）＋ 速度積分
                 simNodes.forEach(s => {
-                    if (s.isRoot) {
-                        // 起点は天井のフックに吊るされたように上部へ係留
-                        s.vx += (s.anchorX - s.x) * 0.06 * cooling;
-                        s.vy += (-280 - s.y) * 0.08 * cooling;
-                    } else if (s.isIsolated) {
-                        // 孤立曲は重力のまま底面へ沈降しつつ中央へ寄せる
-                        s.vy += 4.2 * cooling;
-                        s.vx -= s.x * 0.018 * cooling;
-                    } else {
-                        // 接続された曲には常時下向き重力がかかり、バネ張力と釣り合う位置で静止
-                        const gravityG = 3.2 * cooling;
-                        s.vy += gravityG;
-                        // 横方向に広がりすぎないよう中心軸への穏やかな復元力
-                        s.vx -= s.x * 0.012 * cooling;
+                    if (s.isPinned) {
+                        s.vx = 0;
+                        s.vy = 0;
+                        s.vz = 0;
+                        return;
                     }
 
-                    // 速度減衰（ダンピング）と位置更新
-                    s.vx *= 0.74;
-                    s.vy *= 0.74;
+                    const curR = Math.hypot(s.x, s.y, s.z);
+                    if (s.isAnchor && s.targetR === 0) {
+                        // 単一ルートは原点 (0, 0, 0) に静かにアンカー
+                        s.vx += -s.x * 0.16 * coolingFactor;
+                        s.vy += -s.y * 0.16 * coolingFactor;
+                        s.vz += -s.z * 0.16 * coolingFactor;
+                    } else {
+                        const safeR = curR || 1;
+                        const ux = curR > 1e-3 ? s.x / safeR : Math.cos(Math.random() * Math.PI * 2);
+                        const uy = curR > 1e-3 ? s.y / safeR : (Math.random() - 0.5);
+                        const uz = curR > 1e-3 ? s.z / safeR : Math.sin(Math.random() * Math.PI * 2);
+
+                        // 目標球殻半径 targetR への動径復元力 ＋ 外向き重力バイアス
+                        const radialDiff = s.targetR - curR;
+                        const radialK = s.isAnchor ? 0.11 : (s.isIsolated ? 0.07 : 0.055);
+                        const radialForce = radialDiff * radialK * coolingFactor;
+
+                        s.vx += ux * radialForce;
+                        s.vy += uy * radialForce;
+                        s.vz += uz * radialForce;
+                    }
+
+                    s.vx *= 0.76;
+                    s.vy *= 0.76;
+                    s.vz *= 0.76;
+
                     s.x += s.vx;
                     s.y += s.vy;
+                    s.z += s.vz;
                 });
-
-                // 4. カード矩形サイズ（204x72 + 余白）に基づく衝突解消
-                const boxW = NODE_WIDTH + 34;
-                const boxH = NODE_HEIGHT + 28;
-                for (let i = 0; i < count; i++) {
-                    for (let j = i + 1; j < count; j++) {
-                        const a = simNodes[i];
-                        const b = simNodes[j];
-                        const dx = b.x - a.x;
-                        const dy = b.y - a.y;
-                        const overlapX = boxW - Math.abs(dx);
-                        const overlapY = boxH - Math.abs(dy);
-
-                        if (overlapX > 0 && overlapY > 0) {
-                            if (overlapX < overlapY) {
-                                const push = (overlapX / 2) * 0.75;
-                                const sign = dx >= 0 ? 1 : -1;
-                                a.x -= sign * push;
-                                b.x += sign * push;
-                            } else {
-                                const push = (overlapY / 2) * 0.75;
-                                const sign = dy >= 0 ? 1 : -1;
-                                a.y -= sign * push;
-                                b.y += sign * push;
-                            }
-                        }
-                    }
-                }
             }
 
-            // 仕上げ：残存する矩形重なりの完全解消と全体の重心センタリング
-            const finalBoxW = NODE_WIDTH + 28;
-            const finalBoxH = NODE_HEIGHT + 24;
-            for (let pass = 0; pass < 25; pass++) {
-                let moved = false;
-                for (let i = 0; i < count; i++) {
-                    for (let j = i + 1; j < count; j++) {
-                        const a = simNodes[i];
-                        const b = simNodes[j];
-                        const dx = b.x - a.x;
-                        const dy = b.y - a.y;
-                        const overlapX = finalBoxW - Math.abs(dx);
-                        const overlapY = finalBoxH - Math.abs(dy);
-                        if (overlapX > 0 && overlapY > 0) {
-                            moved = true;
-                            if (overlapX < overlapY) {
-                                const shift = overlapX / 2 + 1;
-                                const sign = dx >= 0 ? 1 : -1;
-                                a.x -= sign * shift;
-                                b.x += sign * shift;
-                            } else {
-                                const shift = overlapY / 2 + 1;
-                                const sign = dy >= 0 ? 1 : -1;
-                                a.y -= sign * shift;
-                                b.y += sign * shift;
-                            }
-                        }
-                    }
-                }
-                if (!moved) break;
-            }
-
-            const avgX = simNodes.reduce((sum, s) => sum + s.x, 0) / count;
-            const avgY = simNodes.reduce((sum, s) => sum + s.y, 0) / count;
-
-            const targetMap = new Map();
+            // 3D直交座標から球座標 (r, theta, phi) を書き戻し、2D画面座標へ投影
             simNodes.forEach(s => {
-                targetMap.set(s.id, {
-                    x: Math.round(s.x - avgX),
-                    y: Math.round(s.y - avgY)
-                });
+                if (!s.isPinned) {
+                    s.node.x3 = s.x;
+                    s.node.y3 = s.y;
+                    s.node.z3 = s.z;
+                    const r = Math.hypot(s.x, s.y, s.z);
+                    s.node.r = r;
+                    s.node.theta = Math.atan2(s.z, s.x);
+                    s.node.phi = r > 1e-4 ? Math.asin(Math.max(-1, Math.min(1, s.y / r))) : 0;
+                }
+                sphereVelocities.set(s.id, { vx: s.vx, vy: s.vy, vz: s.vz });
             });
 
-            animateNodesToPositions(targetMap, '重力整列（物理シミュレーション）');
+            state.sphereMode = true;
+            projectAllSphereNodes();
         }
+
+        // 単発実行の擬似球座標・重力整列（アニメーション付き）
+        function applyGravityLayout() {
+            if (state.nodes.length === 0) {
+                showToast('整列する楽曲がありません');
+                return;
+            }
+            const originalPositions = state.nodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+            sphereVelocities.clear();
+            state.sphereMode = false; // 黄金螺旋シードから綺麗に球殻展開
+
+            for (let wave = 0; wave < 14; wave++) {
+                const cooling = 1 - (wave / 14) * 0.72;
+                stepSphericalGravityPhysics(20, cooling);
+            }
+
+            const targetMap = new Map();
+            state.nodes.forEach(n => {
+                targetMap.set(n.id, { x: n.x, y: n.y });
+            });
+
+            originalPositions.forEach(orig => {
+                const n = state.nodes.find(item => item.id === orig.id);
+                if (n) {
+                    n.x = orig.x;
+                    n.y = orig.y;
+                }
+            });
+
+            syncSphereModeUI();
+            animateNodesToPositions(targetMap, '擬似球座標・重力整列（内→外）');
+        }
+
+        // リアルタイム球座標重力シミュレーション（1秒に1回の描画＆保存）
+        let gravityIntervalId = null;
+
+        function runRealtimeGravityTick() {
+            if (!state.realtimeGravity) return;
+            stepSphericalGravityPhysics(18, 0.65);
+            render();
+            saveToStorage();
+        }
+
+        function setRealtimeGravity(enabled, silent = false) {
+            state.realtimeGravity = enabled;
+            if (gravityIntervalId) {
+                clearInterval(gravityIntervalId);
+                gravityIntervalId = null;
+            }
+
+            const headerBtn = document.getElementById('btn-realtime-gravity');
+            const liveDot = document.getElementById('gravity-live-dot');
+            const menuStatus = document.getElementById('menu-gravity-status');
+            const banner = document.getElementById('gravity-live-banner');
+
+            if (enabled) {
+                sphereVelocities.clear();
+                headerBtn.classList.add('bg-dj-amber/20', 'text-dj-amber', 'border-dj-amber/50', 'glow-amber');
+                headerBtn.classList.remove('text-slate-300', 'border-transparent');
+                if (liveDot) liveDot.classList.remove('hidden');
+                if (menuStatus) {
+                    menuStatus.textContent = 'ON';
+                    menuStatus.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-amber/20 text-dj-amber border border-dj-amber/40 pointer-events-none';
+                }
+                if (banner) banner.classList.remove('hidden');
+
+                runRealtimeGravityTick();
+                syncSphereModeUI();
+                gravityIntervalId = setInterval(runRealtimeGravityTick, 1000);
+                if (!silent) showToast('球座標リアルタイム重力 ON（1秒更新・Alt+ドラッグで回転）');
+            } else {
+                headerBtn.classList.remove('bg-dj-amber/20', 'text-dj-amber', 'border-dj-amber/50', 'glow-amber');
+                headerBtn.classList.add('text-slate-300', 'border-transparent');
+                if (liveDot) liveDot.classList.add('hidden');
+                if (menuStatus) {
+                    menuStatus.textContent = 'OFF';
+                    menuStatus.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-dj-surface text-slate-400 pointer-events-none';
+                }
+                if (banner) banner.classList.add('hidden');
+                render();
+                if (!silent) showToast('球座標リアルタイム重力 OFF');
+            }
+        }
+
+        document.getElementById('btn-realtime-gravity').onclick = () => {
+            setRealtimeGravity(!state.realtimeGravity);
+        };
+
+        document.getElementById('btn-menu-realtime-gravity').onclick = (e) => {
+            e.stopPropagation();
+            layoutDropdown.classList.add('hidden');
+            setRealtimeGravity(!state.realtimeGravity);
+        };
+
+        document.getElementById('btn-stop-gravity-banner').onclick = () => {
+            setRealtimeGravity(false);
+        };
+
+        document.getElementById('btn-reset-sphere-rot').onclick = () => {
+            state.sphereRot = { yaw: 0.35, pitch: -0.22 };
+            projectAllSphereNodes();
+            render();
+            showToast('球体の視点を初期角度にリセットしました');
+        };
+
+        document.getElementById('btn-sphere-orbit').onclick = () => {
+            state.sphereOrbitMode = !state.sphereOrbitMode;
+            syncSphereModeUI();
+            if (state.sphereOrbitMode) {
+                showToast('球体回転モード ON（背景ドラッグで3D回転）');
+            } else {
+                showToast('球体回転モード OFF（背景ドラッグでパン移動）');
+            }
+        };
 
         document.getElementById('btn-layout-bpm').onclick = (e) => {
             e.stopPropagation();
@@ -3471,18 +3871,6 @@
             e.stopPropagation();
             layoutDropdown.classList.add('hidden');
             applyGravityLayout();
-        };
-
-        document.getElementById('btn-layout-genre').onclick = (e) => {
-            e.stopPropagation();
-            layoutDropdown.classList.add('hidden');
-            applyGenreClusterLayout();
-        };
-
-        document.getElementById('btn-layout-force').onclick = (e) => {
-            e.stopPropagation();
-            layoutDropdown.classList.add('hidden');
-            applyForceLayout();
         };
 
         const dataMenuWrapper = document.getElementById('data-menu-wrapper');
@@ -3578,11 +3966,9 @@
                         state.setlists = parsed.setlists;
                         state.activeSetlistId = parsed.activeSetlistId || parsed.setlists[0].id;
                     } else {
-                        state.setlists = [];
-                        state.activeSetlistId = null;
-                        state.setlist = [];
+                        state.setlists = [{ id: 'sl_default', name: 'セトリ #1', tracks: [] }];
+                        state.activeSetlistId = 'sl_default';
                     }
-                    ensureDefaultSetlist();
                     clearSelection();
                     updateGenreFilterOptions();
                     updateSearchCountBadge();
@@ -3604,15 +3990,12 @@
             e.stopPropagation();
             dataDropdown.classList.add('hidden');
             showConfirm('サンプルデータの復元', '現在のグラフを上書きして、サンプルのDJつなぎネットワークを読み込みますか？', () => {
+                if (state.realtimeGravity) setRealtimeGravity(false, true);
                 const sample = getSampleData();
                 state.nodes = sample.nodes;
                 state.edges = sample.edges;
-                state.setlists = [
-                    { id: generateId('sl'), name: 'メイン王道ルート', trackIds: ['n1', 'n2', 'n3', 'n5'] },
-                    { id: generateId('sl'), name: 'ジャズ〜メロディック展開', trackIds: ['n1', 'n4', 'n6', 'n3'] }
-                ];
-                state.activeSetlistId = state.setlists[0].id;
-                syncActiveSetlistArray();
+                state.setlists = sample.setlists;
+                state.activeSetlistId = sample.activeSetlistId;
                 clearSelection();
                 updateGenreFilterOptions();
                 updateSearchCountBadge();
@@ -3628,12 +4011,11 @@
             e.stopPropagation();
             dataDropdown.classList.add('hidden');
             showConfirm('全消去（新規作成）', 'すべての楽曲とつなぎデータを消去して白紙から始めますか？', () => {
+                if (state.realtimeGravity) setRealtimeGravity(false, true);
                 state.nodes = [];
                 state.edges = [];
-                state.setlists = [];
-                state.activeSetlistId = null;
-                state.setlist = [];
-                ensureDefaultSetlist();
+                state.setlists = [{ id: 'sl_default', name: 'セトリ #1', tracks: [] }];
+                state.activeSetlistId = 'sl_default';
                 clearSelection();
                 updateGenreFilterOptions();
                 updateSearchCountBadge();
@@ -3696,9 +4078,17 @@
         // ==========================================
         // 13. 初期化エントリーポイント
         // ==========================================
+        if (typeof ResizeObserver !== 'undefined') {
+            const canvasResizeObserver = new ResizeObserver(() => {
+                resizeCanvas();
+            });
+            canvasResizeObserver.observe(container);
+        }
+
         window.addEventListener('resize', () => {
             syncLeftSidebarToggleButton();
             syncSidebarToggleButton();
+            syncSphereModeUI();
             resizeCanvas();
         });
 
@@ -3709,12 +4099,8 @@
                 const sample = getSampleData();
                 state.nodes = sample.nodes;
                 state.edges = sample.edges;
-                state.setlists = [
-                    { id: generateId('sl'), name: 'メイン王道ルート', trackIds: ['n1', 'n2', 'n3', 'n5'] },
-                    { id: generateId('sl'), name: 'ジャズ〜メロディック展開', trackIds: ['n1', 'n4', 'n6', 'n3'] }
-                ];
-                state.activeSetlistId = state.setlists[0].id;
-                syncActiveSetlistArray();
+                state.setlists = sample.setlists;
+                state.activeSetlistId = sample.activeSetlistId;
                 saveToStorage();
             }
             updateGenreFilterOptions();
@@ -3726,6 +4112,10 @@
             syncSidebarToggleButton();
             resizeCanvas();
             fitGraphToScreen();
+            requestAnimationFrame(() => {
+                resizeCanvas();
+                fitGraphToScreen();
+            });
         };
     </script>
 </body>
