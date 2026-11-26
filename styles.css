@@ -1,0 +1,35 @@
+/* TRANSITION DECK - Custom Styles */
+body {
+            background-color: #090a0f;
+            color: #e2e8f0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #12141d;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #282c3f;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f4663;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+        }
+        .glow-pink {
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.25);
+        }
+        .glow-amber {
+            box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+        }
